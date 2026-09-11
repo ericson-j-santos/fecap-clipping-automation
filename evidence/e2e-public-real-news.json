@@ -1,0 +1,61 @@
+{
+  "correlation_id": "clipping-public-e2e-20260911-001",
+  "environment": "sandbox-homologacao",
+  "cases": {
+    "positive": {
+      "decision": {
+        "status": "include",
+        "reason": "participação editorial explícita de porta-voz FECAP",
+        "person": "Ahmed El Khatib",
+        "business_unit": "Graduação",
+        "tier": 2
+      },
+      "persist_result": "inserted",
+      "independent_read": [[
+        "Déficit nominal das contas públicas brasileiras consolidadas alcançou R$ 1.239,8 bilhões...",
+        "Mercado Comum",
+        "2026-08-31",
+        "Ahmed El Khatib",
+        "Graduação",
+        2,
+        "https://mercadocomum.com/deficit-nominal-das-contas-publicas-brasileiras-consolidadas-alcancou-r-1-2398-bilhoes-934-do-pib-no-acumulado-dos-doze-meses-ate-julho-deste-ano-pagamento-de-juros-sobre-a-divida-publica-foi-re"
+      ]]
+    },
+    "incidental": {
+      "decision": {
+        "status": "exclude",
+        "reason": "menção biográfica/curricular sem participação editorial",
+        "person": null,
+        "business_unit": null,
+        "tier": null
+      },
+      "persist_result": "not_published",
+      "published_count": 0
+    },
+    "ambiguous": {
+      "decision": {
+        "status": "review",
+        "reason": "referência real à FECAP sem contexto suficiente para decisão automática",
+        "person": null,
+        "business_unit": null,
+        "tier": null
+      },
+      "persist_result": "queued",
+      "independent_read": [[
+        "FinancIEB 2026 – Sistema Nacional de Educação: impactos, governança e sustentabilidade",
+        "SEMESB",
+        "2026-08-26",
+        "referência real à FECAP sem contexto suficiente para decisão automática"
+      ]]
+    },
+    "idempotency_repeat": {
+      "persist_result": "duplicate",
+      "final_count": 1
+    }
+  },
+  "status": "PASS",
+  "limitations": [
+    "Coleta real feita em fontes públicas da web, não pela sessão autenticada da Knewin.",
+    "Destino de homologação usado: SQLite isolado; Excel/SharePoint ainda não conectado."
+  ]
+}
