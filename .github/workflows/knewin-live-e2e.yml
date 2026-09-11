@@ -1,0 +1,49 @@
+name: Knewin Live E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: Início UTC
+        required: true
+        default: '2026-08-01T00:00:00Z'
+      end:
+        description: Fim UTC
+        required: true
+        default: '2026-08-31T23:59:59Z'
+
+permissions:
+  contents: read
+
+jobs:
+  live-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      KNEWIN_API_KEY: ${{ secrets.KNEWIN_API_KEY }}
+      KNEWIN_START: ${{ inputs.start }}
+      KNEWIN_END: ${{ inputs.end }}
+      CORRELATION_ID: knewin-gha-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validar pré-condição de autenticação
+        run: |
+          if [ -z "$KNEWIN_API_KEY" ]; then
+            echo 'E2E_BLOCKED: configure o secret KNEWIN_API_KEY no repositório.' >&2
+            exit 20
+          fi
+      - name: Executar E2E real Knewin
+        run: python scripts/e2e_live_knewin.py
+      - name: Publicar evidência privada da execução
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: knewin-live-e2e-${{ github.run_id }}
+          path: evidence/private/e2e-live-summary.json
+          if-no-files-found: warn
+          retention-days: 14
