@@ -28,3 +28,11 @@ def test_unknown_fails_closed_when_no_auth_evidence():
     result = classify_auth([], [], [], [], [])
     assert result.auth_mode == "unknown"
     assert result.secrets_captured is False
+
+
+if __name__ == "__main__":
+    test_bearer_has_priority_and_never_captures_value()
+    test_oidc_detected_from_storage_or_identity_host()
+    test_cookie_session_detected_without_cookie_values()
+    test_unknown_fails_closed_when_no_auth_evidence()
+    print("session auth probe tests: PASS")
