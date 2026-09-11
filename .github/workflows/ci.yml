@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  e2e-public-news:
+  tests:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -18,7 +18,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Executar E2E determinístico
+      - name: Validar contrato da API Knewin
+        run: python tests/test_knewin_api.py
+      - name: Executar E2E público determinístico
         run: python tests/e2e_public_news.py
       - name: Confirmar evidência gerada
         run: test -s evidence/e2e-public-real-news.json
