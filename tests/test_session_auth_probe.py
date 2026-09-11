@@ -1,4 +1,10 @@
-from src.session_auth_probe import classify_auth, header_scheme
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from session_auth_probe import classify_auth, header_scheme
 
 
 def test_bearer_has_priority_and_never_captures_value():
