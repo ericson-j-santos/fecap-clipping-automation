@@ -20,6 +20,8 @@ jobs:
           python-version: '3.12'
       - name: Validar contrato da API Knewin
         run: python tests/test_knewin_api.py
+      - name: Validar sonda de autenticação sem segredos
+        run: python -m pytest -q tests/test_session_auth_probe.py
       - name: Executar E2E público determinístico
         run: python tests/e2e_public_news.py
       - name: Confirmar evidência gerada
