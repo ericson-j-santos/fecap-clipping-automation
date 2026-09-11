@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
+from hashlib import sha256
 from typing import Iterable
-
-SENSITIVE_MARKERS = ("token", "auth", "session", "jwt", "bearer", "oidc", "oauth", "msal")
+from urllib.parse import urlparse
 
 
 @dataclass(frozen=True)
@@ -36,35 +36,45 @@ def classify_auth(
     local_keys = _safe_names(local_storage_keys)
     session_keys = _safe_names(session_storage_keys)
     hosts = _safe_names(oidc_hosts)
-
     storage_text = " ".join((*local_keys, *session_keys)).lower()
-    cookie_text = " ".join(cookies).lower()
 
     if "bearer" in schemes:
-        mode = "bearer"
-        scheme = "Bearer"
+        mode, scheme = "bearer", "Bearer"
     elif any(marker in storage_text for marker in ("oidc", "oauth", "msal")) or hosts:
-        mode = "oidc"
-        scheme = None
+        mode, scheme = "oidc", None
     elif cookies:
-        mode = "cookie"
-        scheme = None
+        mode, scheme = "cookie", None
     else:
-        mode = "unknown"
-        scheme = None
+        mode, scheme = "unknown", None
 
-    return AuthEvidence(
-        auth_mode=mode,
-        authorization_scheme=scheme,
-        cookie_names=cookies,
-        local_storage_keys=local_keys,
-        session_storage_keys=session_keys,
-        oidc_hosts=hosts,
-        secrets_captured=False,
-    )
+    return AuthEvidence(mode, scheme, cookies, local_keys, session_keys, hosts, False)
 
 
 def header_scheme(value: str | None) -> str | None:
     if not value:
         return None
     return value.split(" ", 1)[0].strip() or None
+
+
+def is_login_like_url(url: str) -> bool:
+    parsed = urlparse(url)
+    text = f"{parsed.hostname or ''}{parsed.path}".lower()
+    return any(marker in text for marker in ("login", "signin", "sign-in", "oauth", "oidc", "authorize", "sso"))
+
+
+def session_reuse_is_valid(initial_url: str, reopened_url: str, auth_mode: str) -> bool:
+    if auth_mode == "unknown" or is_login_like_url(reopened_url):
+        return False
+    first, second = urlparse(initial_url), urlparse(reopened_url)
+    first_path = (first.path or "/").rstrip("/") or "/"
+    second_path = (second.path or "/").rstrip("/") or "/"
+    return first.scheme == second.scheme and first.netloc == second.netloc and first_path == second_path
+
+
+def url_fingerprint(url: str) -> dict[str, str]:
+    parsed = urlparse(url)
+    normalized = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    return {
+        "host": parsed.hostname or "",
+        "path_sha256": sha256(normalized.encode("utf-8")).hexdigest(),
+    }
