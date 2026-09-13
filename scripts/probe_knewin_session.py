@@ -10,8 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.session_auth_probe import (
+    build_network_inventory,
     classify_auth,
-    dedupe_network_observations,
     header_scheme,
     is_login_like_url,
     network_observation,
@@ -68,18 +68,13 @@ def attach_response_probe(context, observations: list[dict]) -> None:
 
 
 def safe_inventory(*groups: list[dict]) -> dict:
-    endpoints = dedupe_network_observations(item for group in groups for item in group)
-    truncated = (
-        any(len(group) >= MAX_NETWORK_OBSERVATIONS for group in groups)
-        or len(endpoints) > MAX_JSON_ENDPOINTS
+    observations = [item for group in groups for item in group]
+    raw_truncated = any(len(group) >= MAX_NETWORK_OBSERVATIONS for group in groups)
+    return build_network_inventory(
+        observations,
+        max_entries=MAX_JSON_ENDPOINTS,
+        raw_truncated=raw_truncated,
     )
-    endpoints = endpoints[:MAX_JSON_ENDPOINTS]
-    return {
-        "json_endpoint_count": len(endpoints),
-        "json_endpoints": endpoints,
-        "truncated": truncated,
-        "secrets_captured": False,
-    }
 
 
 def main() -> int:
