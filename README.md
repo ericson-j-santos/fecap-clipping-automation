@@ -9,6 +9,7 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 - E2E com notícias públicas reais + SQLite de homologação: aprovado;
 - sonda de sessão e inventário sanitizado de endpoints JSON: implementados;
 - templates de rota com identificadores mascarados: implementados;
+- jornada guiada e ranking de endpoints candidatos: implementados;
 - coleta autenticada de notícias no portal Knewin: pendente de evidência real;
 - Excel/SharePoint de homologação: pendente.
 
@@ -25,8 +26,11 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
    `python scripts/setup_local.py`
 4. Execute o E2E público:
    `python tests/e2e_public_news.py`
-5. Para iniciar uma sessão Knewin nova no próprio computador:
+5. Inicie a sonda autenticada:
    `python scripts/probe_knewin_session.py`
+6. Após autenticar, navegue até a área real de clipping/notícias, execute uma consulta conhecida e confirme no terminal quando os resultados estiverem carregados.
+7. Classifique as rotas sanitizadas observadas:
+   `python scripts/analyze_knewin_inventory.py`
 
 Para apenas diagnosticar sem instalar dependências:
 
@@ -38,7 +42,7 @@ Para preparar sem instalar o Chromium:
 
 Não copie perfil Chromium, cookies, tokens, `localStorage`, `sessionStorage`, arquivos de `evidence/private` ou chaves da API Knewin entre computadores.
 
-A sonda Knewin grava em `evidence/private/knewin-auth-probe.json` apenas metadados sanitizados. O inventário de rede mantém host, template de rota mascarado, hash da rota, método, status e tipo MIME de respostas JSON; não grava URL completa, query string, cabeçalhos nem corpos.
+A sonda Knewin grava em `evidence/private/knewin-auth-probe.json` apenas metadados sanitizados. O inventário de rede mantém host, template de rota mascarado, hash da rota, método, status e tipo MIME de respostas JSON; não grava URL completa, query string, cabeçalhos nem corpos. O analisador gera `evidence/private/knewin-endpoint-candidates.json` apenas a partir desses metadados.
 
 ## Pacote portátil
 
