@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from session_auth_probe import (
+    build_network_inventory,
     classify_auth,
     dedupe_network_observations,
     header_scheme,
@@ -95,6 +96,23 @@ def test_network_inventory_is_deduplicated_deterministically():
     assert all(item["secrets_captured"] is False for item in result)
 
 
+def test_network_inventory_filters_caps_and_reports_truncation():
+    observations = [
+        network_observation(f"https://api.example.com/item/{index}?token=secret", "GET", 200, "application/json")
+        for index in range(4)
+    ]
+    observations.append(network_observation("https://api.example.com/page", "GET", 200, "text/html"))
+    inventory = build_network_inventory(observations, max_entries=2)
+    assert inventory["json_endpoint_count"] == 2
+    assert len(inventory["json_endpoints"]) == 2
+    assert inventory["truncated"] is True
+    assert inventory["secrets_captured"] is False
+    assert "secret" not in json.dumps(inventory, sort_keys=True)
+
+    raw_truncated = build_network_inventory(observations[:1], max_entries=10, raw_truncated=True)
+    assert raw_truncated["truncated"] is True
+
+
 if __name__ == "__main__":
     test_bearer_has_priority_and_never_captures_value()
     test_oidc_and_cookie_are_detected_without_values()
@@ -104,4 +122,5 @@ if __name__ == "__main__":
     test_network_inventory_keeps_only_sanitized_metadata()
     test_json_content_types_and_non_json_are_classified()
     test_network_inventory_is_deduplicated_deterministically()
+    test_network_inventory_filters_caps_and_reports_truncation()
     print("session auth probe tests: PASS")
