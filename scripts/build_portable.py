@@ -1,0 +1,68 @@
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import zipfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_OUTPUT = ROOT / "dist" / "fecap-clipping-portable.zip"
+SAFE_FILES = (
+    ".gitignore",
+    "README.md",
+    "requirements-local.txt",
+    "config/people.json",
+    "src/clipping.py",
+    "src/knewin_api.py",
+    "src/session_auth_probe.py",
+    "scripts/build_portable.py",
+    "scripts/local_doctor.py",
+    "scripts/probe_knewin_session.py",
+    "scripts/e2e_live_knewin.py",
+    "tests/e2e_public_news.py",
+    "tests/test_knewin_api.py",
+    "tests/test_session_auth_probe.py",
+)
+
+
+def sha256_bytes(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()
+
+
+def build_portable(output: Path, root: Path = ROOT) -> dict:
+    missing = [rel for rel in SAFE_FILES if not (root / rel).is_file()]
+    if missing:
+        raise FileNotFoundError("arquivos obrigatórios ausentes: " + ", ".join(missing))
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    manifest = {"format": 1, "files": []}
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for rel in sorted(SAFE_FILES):
+            payload = (root / rel).read_bytes()
+            info = zipfile.ZipInfo(rel, date_time=(2026, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            archive.writestr(info, payload)
+            manifest["files"].append(
+                {"path": rel, "size": len(payload), "sha256": sha256_bytes(payload)}
+            )
+        manifest_payload = (json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+        info = zipfile.ZipInfo("PORTABLE-MANIFEST.json", date_time=(2026, 1, 1, 0, 0, 0))
+        info.compress_type = zipfile.ZIP_DEFLATED
+        info.external_attr = 0o644 << 16
+        archive.writestr(info, manifest_payload)
+    return manifest
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Gera pacote portátil seguro da automação FECAP")
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    ns = parser.parse_args()
+    manifest = build_portable(ns.output)
+    print(json.dumps({"status": "OK", "output": str(ns.output), "files": len(manifest["files"])}, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
