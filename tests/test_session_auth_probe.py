@@ -98,16 +98,23 @@ def test_network_inventory_is_deduplicated_deterministically():
 
 def test_network_inventory_filters_caps_and_reports_truncation():
     observations = [
-        network_observation(f"https://api.example.com/item/{index}?token=secret", "GET", 200, "application/json")
+        network_observation(
+            f"https://api.example.com/item/{index}?token=leak-value-{index}",
+            "GET",
+            200,
+            "application/json",
+        )
         for index in range(4)
     ]
     observations.append(network_observation("https://api.example.com/page", "GET", 200, "text/html"))
     inventory = build_network_inventory(observations, max_entries=2)
+    serialized = json.dumps(inventory, sort_keys=True)
     assert inventory["json_endpoint_count"] == 2
     assert len(inventory["json_endpoints"]) == 2
     assert inventory["truncated"] is True
     assert inventory["secrets_captured"] is False
-    assert "secret" not in json.dumps(inventory, sort_keys=True)
+    assert "leak-value-" not in serialized
+    assert "token=" not in serialized
 
     raw_truncated = build_network_inventory(observations[:1], max_entries=10, raw_truncated=True)
     assert raw_truncated["truncated"] is True
