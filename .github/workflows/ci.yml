@@ -24,6 +24,10 @@ jobs:
         run: python tests/test_setup_local.py
       - name: Validar construção do pacote portátil
         run: python tests/test_build_portable.py
+      - name: Validar descoberta de endpoints Knewin
+        run: python tests/test_knewin_discovery.py
+      - name: Validar sintaxe dos scripts interativos
+        run: python -m py_compile scripts/probe_knewin_session.py scripts/analyze_knewin_inventory.py
       - name: Gerar pacote portátil
         run: python scripts/build_portable.py
       - name: Publicar pacote portátil
