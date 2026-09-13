@@ -26,8 +26,10 @@ jobs:
         run: python tests/test_build_portable.py
       - name: Validar descoberta de endpoints Knewin
         run: python tests/test_knewin_discovery.py
+      - name: Validar plano evidenciado do coletor Knewin
+        run: python tests/test_knewin_collector_plan.py
       - name: Validar sintaxe dos scripts interativos
-        run: python -m py_compile scripts/probe_knewin_session.py scripts/analyze_knewin_inventory.py
+        run: python -m py_compile scripts/probe_knewin_session.py scripts/analyze_knewin_inventory.py scripts/prepare_knewin_collector.py
       - name: Gerar pacote portátil
         run: python scripts/build_portable.py
       - name: Publicar pacote portátil
