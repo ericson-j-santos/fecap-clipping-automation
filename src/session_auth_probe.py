@@ -78,3 +78,56 @@ def url_fingerprint(url: str) -> dict[str, str]:
         "host": parsed.hostname or "",
         "path_sha256": sha256(normalized.encode("utf-8")).hexdigest(),
     }
+
+
+def normalize_content_type(value: str | None) -> str | None:
+    if not value:
+        return None
+    mime = value.split(";", 1)[0].strip().lower()
+    return mime[:120] or None
+
+
+def network_observation(
+    url: str,
+    method: str,
+    status: int | None,
+    content_type: str | None,
+) -> dict:
+    location = url_fingerprint(url)
+    mime = normalize_content_type(content_type)
+    try:
+        safe_status = int(status) if status is not None else None
+    except (TypeError, ValueError):
+        safe_status = None
+    return {
+        "host": location["host"],
+        "path_sha256": location["path_sha256"],
+        "method": (method or "UNKNOWN").strip().upper()[:16],
+        "status": safe_status,
+        "content_type": mime,
+        "is_json": bool(mime and (mime == "application/json" or mime.endswith("+json"))),
+        "secrets_captured": False,
+    }
+
+
+def dedupe_network_observations(observations: Iterable[dict]) -> list[dict]:
+    unique: dict[tuple, dict] = {}
+    for item in observations:
+        key = (
+            item.get("host", ""),
+            item.get("path_sha256", ""),
+            item.get("method", ""),
+            item.get("status"),
+            item.get("content_type"),
+            bool(item.get("is_json")),
+        )
+        unique[key] = {
+            "host": key[0],
+            "path_sha256": key[1],
+            "method": key[2],
+            "status": key[3],
+            "content_type": key[4],
+            "is_json": key[5],
+            "secrets_captured": False,
+        }
+    return [unique[key] for key in sorted(unique, key=lambda value: tuple("" if part is None else str(part) for part in value))]
