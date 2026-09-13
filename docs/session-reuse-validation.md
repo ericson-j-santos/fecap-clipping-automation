@@ -16,12 +16,19 @@ Critério de aceite:
 
 Durante a validação, a sonda observa respostas JSON para descobrir quais serviços o portal utiliza. A evidência permite apenas:
 - host;
-- SHA-256 da origem + caminho, sem expor o caminho em texto;
+- `route_template` sanitizado, preservando segmentos fixos e mascarando identificadores;
+- SHA-256 da origem + rota sanitizada;
 - método HTTP;
 - status HTTP;
 - tipo MIME normalizado;
 - indicador `is_json`;
 - `secrets_captured=false`.
+
+Exemplos de mascaramento:
+- `/v3/cliente/123456/noticias` → `/v3/cliente/{n}/noticias`;
+- `/jobs/550e8400-e29b-41d4-a716-446655440000/status` → `/jobs/{uuid}/status`;
+- segmentos hexadecimais longos → `{id}`;
+- segmentos codificados ou opacos → `{encoded}` / `{opaque}`.
 
 A evidência nunca grava URL completa, query string, parâmetros, cabeçalhos, cookies, Authorization, tokens, corpo de requisição ou corpo de resposta. O inventário é deduplicado, ordenado deterministicamente e limitado a 250 endpoints JSON; `truncated=true` informa quando o limite foi atingido.
 
