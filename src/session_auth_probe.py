@@ -131,3 +131,22 @@ def dedupe_network_observations(observations: Iterable[dict]) -> list[dict]:
             "secrets_captured": False,
         }
     return [unique[key] for key in sorted(unique, key=lambda value: tuple("" if part is None else str(part) for part in value))]
+
+
+def build_network_inventory(
+    observations: Iterable[dict],
+    *,
+    max_entries: int = 250,
+    raw_truncated: bool = False,
+) -> dict:
+    if max_entries < 1:
+        raise ValueError("max_entries deve ser maior que zero")
+    endpoints = [item for item in dedupe_network_observations(observations) if item["is_json"]]
+    truncated = raw_truncated or len(endpoints) > max_entries
+    endpoints = endpoints[:max_entries]
+    return {
+        "json_endpoint_count": len(endpoints),
+        "json_endpoints": endpoints,
+        "truncated": truncated,
+        "secrets_captured": False,
+    }
