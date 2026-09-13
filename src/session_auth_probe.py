@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, asdict
 from hashlib import sha256
+import re
 from typing import Iterable
 from urllib.parse import urlparse
 
@@ -80,6 +81,34 @@ def url_fingerprint(url: str) -> dict[str, str]:
     }
 
 
+def _sanitize_path_segment(segment: str) -> str:
+    if not segment:
+        return ""
+    if "%" in segment:
+        return "{encoded}"
+    if "@" in segment:
+        return "{email}"
+    if re.fullmatch(r"[0-9]+", segment):
+        return "{n}"
+    if re.fullmatch(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}", segment):
+        return "{uuid}"
+    if re.fullmatch(r"[0-9a-fA-F]{12,}", segment):
+        return "{id}"
+    if len(segment) >= 20 and re.search(r"[A-Za-z]", segment) and re.search(r"[0-9]", segment):
+        return "{id}"
+    if len(segment) > 40:
+        return "{opaque}"
+    if not re.fullmatch(r"[A-Za-z0-9._~-]+", segment):
+        return "{opaque}"
+    return segment
+
+
+def sanitize_route_template(url: str) -> str:
+    parsed = urlparse(url)
+    parts = [_sanitize_path_segment(segment) for segment in (parsed.path or "/").split("/") if segment]
+    return "/" + "/".join(parts) if parts else "/"
+
+
 def normalize_content_type(value: str | None) -> str | None:
     if not value:
         return None
@@ -93,15 +122,19 @@ def network_observation(
     status: int | None,
     content_type: str | None,
 ) -> dict:
-    location = url_fingerprint(url)
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    route_template = sanitize_route_template(url)
+    normalized_route = f"{parsed.scheme.lower()}://{host}{route_template}"
     mime = normalize_content_type(content_type)
     try:
         safe_status = int(status) if status is not None else None
     except (TypeError, ValueError):
         safe_status = None
     return {
-        "host": location["host"],
-        "path_sha256": location["path_sha256"],
+        "host": host,
+        "route_template": route_template,
+        "path_sha256": sha256(normalized_route.encode("utf-8")).hexdigest(),
         "method": (method or "UNKNOWN").strip().upper()[:16],
         "status": safe_status,
         "content_type": mime,
@@ -115,6 +148,7 @@ def dedupe_network_observations(observations: Iterable[dict]) -> list[dict]:
     for item in observations:
         key = (
             item.get("host", ""),
+            item.get("route_template", ""),
             item.get("path_sha256", ""),
             item.get("method", ""),
             item.get("status"),
@@ -123,11 +157,12 @@ def dedupe_network_observations(observations: Iterable[dict]) -> list[dict]:
         )
         unique[key] = {
             "host": key[0],
-            "path_sha256": key[1],
-            "method": key[2],
-            "status": key[3],
-            "content_type": key[4],
-            "is_json": key[5],
+            "route_template": key[1],
+            "path_sha256": key[2],
+            "method": key[3],
+            "status": key[4],
+            "content_type": key[5],
+            "is_json": key[6],
             "secrets_captured": False,
         }
     return [unique[key] for key in sorted(unique, key=lambda value: tuple("" if part is None else str(part) for part in value))]
