@@ -19,16 +19,20 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 
 1. Copie/baixe este repositório para o computador de trabalho.
 2. Use Python 3.11 ou superior; o CI usa Python 3.12.
-3. Valide o ambiente:
-   `python scripts/local_doctor.py`
-4. Para coleta autenticada pelo navegador:
-   `python -m pip install -r requirements-local.txt`
-5. Instale o Chromium do Playwright:
-   `python -m playwright install chromium`
-6. Execute o E2E público:
+3. Prepare o ambiente em um comando:
+   `python scripts/setup_local.py`
+4. Execute o E2E público:
    `python tests/e2e_public_news.py`
-7. Para iniciar uma sessão Knewin nova no próprio computador:
+5. Para iniciar uma sessão Knewin nova no próprio computador:
    `python scripts/probe_knewin_session.py`
+
+Para apenas diagnosticar sem instalar dependências:
+
+`python scripts/setup_local.py --check-only`
+
+Para preparar sem instalar o Chromium:
+
+`python scripts/setup_local.py --skip-browser`
 
 Não copie perfil Chromium, cookies, tokens, `localStorage`, `sessionStorage`, arquivos de `evidence/private` ou chaves da API Knewin entre computadores.
 
@@ -42,7 +46,7 @@ Saída padrão:
 
 `dist/fecap-clipping-portable.zip`
 
-O ZIP contém `PORTABLE-MANIFEST.json` com tamanho e SHA-256 de cada arquivo e exclui deliberadamente sessão Knewin e evidências privadas.
+O ZIP contém `PORTABLE-MANIFEST.json` com tamanho e SHA-256 de cada arquivo e exclui deliberadamente sessão Knewin e evidências privadas. O CI também publica esse ZIP como artefato `fecap-clipping-portable`.
 
 ## Executar
 `python tests/e2e_public_news.py`
