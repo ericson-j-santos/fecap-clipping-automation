@@ -7,3 +7,6 @@ data/*.sqlite3
 auth-state*.json
 playwright/.auth/
 evidence/private/
+dist/
+.fecap-clipping/
+knewin-profile/
