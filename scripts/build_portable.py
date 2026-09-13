@@ -18,6 +18,7 @@ SAFE_FILES = (
     "src/session_auth_probe.py",
     "scripts/build_portable.py",
     "scripts/local_doctor.py",
+    "scripts/setup_local.py",
     "scripts/probe_knewin_session.py",
     "scripts/e2e_live_knewin.py",
     "tests/e2e_public_news.py",
