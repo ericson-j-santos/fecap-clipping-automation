@@ -7,7 +7,8 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 - idempotência SHA-256: implementada;
 - fila de revisão: implementada;
 - E2E com notícias públicas reais + SQLite de homologação: aprovado;
-- coleta autenticada no Knewin: pendente;
+- sonda de sessão e inventário sanitizado de endpoints JSON: implementados;
+- coleta autenticada de notícias no portal Knewin: pendente de evidência real;
 - Excel/SharePoint de homologação: pendente.
 
 ## Regra inicial
@@ -35,6 +36,8 @@ Para preparar sem instalar o Chromium:
 `python scripts/setup_local.py --skip-browser`
 
 Não copie perfil Chromium, cookies, tokens, `localStorage`, `sessionStorage`, arquivos de `evidence/private` ou chaves da API Knewin entre computadores.
+
+A sonda Knewin grava em `evidence/private/knewin-auth-probe.json` apenas metadados sanitizados. O inventário de rede mantém host, hash do caminho, método, status e tipo MIME de respostas JSON; não grava URL completa, query string, cabeçalhos nem corpos.
 
 ## Pacote portátil
 
