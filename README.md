@@ -10,7 +10,8 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 - sonda de sessão e inventário sanitizado de endpoints JSON: implementados;
 - templates de rota com identificadores mascarados: implementados;
 - jornada guiada e ranking de endpoints candidatos: implementados;
-- coleta autenticada de notícias no portal Knewin: pendente de evidência real;
+- plano do coletor vinculado à evidência por SHA-256: implementado;
+- coleta autenticada de notícias no portal Knewin: pendente de evidência real e validação do endpoint;
 - Excel/SharePoint de homologação: pendente.
 
 ## Regra inicial
@@ -31,6 +32,8 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 6. Após autenticar, navegue até a área real de clipping/notícias, execute uma consulta conhecida e confirme no terminal quando os resultados estiverem carregados.
 7. Classifique as rotas sanitizadas observadas:
    `python scripts/analyze_knewin_inventory.py`
+8. Gere o plano fail-closed do coletor a partir do endpoint realmente observado:
+   `python scripts/prepare_knewin_collector.py`
 
 Para apenas diagnosticar sem instalar dependências:
 
@@ -43,6 +46,8 @@ Para preparar sem instalar o Chromium:
 Não copie perfil Chromium, cookies, tokens, `localStorage`, `sessionStorage`, arquivos de `evidence/private` ou chaves da API Knewin entre computadores.
 
 A sonda Knewin grava em `evidence/private/knewin-auth-probe.json` apenas metadados sanitizados. O inventário de rede mantém host, template de rota mascarado, hash da rota, método, status e tipo MIME de respostas JSON; não grava URL completa, query string, cabeçalhos nem corpos. O analisador gera `evidence/private/knewin-endpoint-candidates.json` apenas a partir desses metadados.
+
+`prepare_knewin_collector.py` não acessa a rede. Ele recusa evidência sem `PASS`, inventário truncado, rotas de autenticação, host fora do contexto Knewin, método não permitido, status não-2xx ou qualquer registro sem `secrets_captured=false`. Quando aprovado, gera `evidence/private/knewin-collector-plan.json` com `network_enabled=false` e um `evidence_binding_sha256` determinístico. A rede só deve ser habilitada em incremento posterior, depois da validação real do endpoint e do esquema de resposta.
 
 ## Pacote portátil
 
