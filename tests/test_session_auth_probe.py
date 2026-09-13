@@ -13,6 +13,7 @@ from session_auth_probe import (
     is_login_like_url,
     network_observation,
     normalize_content_type,
+    sanitize_route_template,
     session_reuse_is_valid,
     url_fingerprint,
 )
@@ -58,15 +59,28 @@ def test_url_evidence_is_fingerprinted_without_query_value():
     assert "secret-value" not in str(first)
 
 
+def test_route_template_masks_variable_segments():
+    numeric = sanitize_route_template("https://api.example.com/v3/cliente/123456/noticias?token=x")
+    uuid = sanitize_route_template("https://api.example.com/jobs/550e8400-e29b-41d4-a716-446655440000/status")
+    opaque = sanitize_route_template("https://api.example.com/files/0123456789abcdef01234567/download")
+    encoded = sanitize_route_template("https://api.example.com/user/john%40example.com/profile")
+    assert numeric == "/v3/cliente/{n}/noticias"
+    assert uuid == "/jobs/{uuid}/status"
+    assert opaque == "/files/{id}/download"
+    assert encoded == "/user/{encoded}/profile"
+
+
 def test_network_inventory_keeps_only_sanitized_metadata():
     item = network_observation(
-        "https://monitoring.knewinapis.com/v3/cliente/noticias?token=super-secret&person=123",
+        "https://monitoring.knewinapis.com/v3/cliente/123456/noticias?token=super-secret&person=123",
         "post",
         200,
         "application/json; charset=utf-8",
     )
     serialized = json.dumps(item, sort_keys=True)
     assert item["host"] == "monitoring.knewinapis.com"
+    assert item["route_template"] == "/v3/cliente/{n}/noticias"
+    assert len(item["path_sha256"]) == 64
     assert item["method"] == "POST"
     assert item["status"] == 200
     assert item["content_type"] == "application/json"
@@ -74,7 +88,7 @@ def test_network_inventory_keeps_only_sanitized_metadata():
     assert item["secrets_captured"] is False
     assert "super-secret" not in serialized
     assert "person=123" not in serialized
-    assert "/v3/cliente/noticias" not in serialized
+    assert "123456" not in serialized
     assert "authorization" not in serialized.lower()
 
 
@@ -99,12 +113,12 @@ def test_network_inventory_is_deduplicated_deterministically():
 def test_network_inventory_filters_caps_and_reports_truncation():
     observations = [
         network_observation(
-            f"https://api.example.com/item/{index}?token=leak-value-{index}",
+            f"https://api.example.com/item/{name}?token=leak-value-{name}",
             "GET",
             200,
             "application/json",
         )
-        for index in range(4)
+        for name in ("alpha", "beta", "gamma", "delta")
     ]
     observations.append(network_observation("https://api.example.com/page", "GET", 200, "text/html"))
     inventory = build_network_inventory(observations, max_entries=2)
@@ -126,6 +140,7 @@ if __name__ == "__main__":
     test_unknown_fails_closed_when_no_auth_evidence()
     test_reuse_requires_same_authenticated_route_and_known_auth()
     test_url_evidence_is_fingerprinted_without_query_value()
+    test_route_template_masks_variable_segments()
     test_network_inventory_keeps_only_sanitized_metadata()
     test_json_content_types_and_non_json_are_classified()
     test_network_inventory_is_deduplicated_deterministically()
