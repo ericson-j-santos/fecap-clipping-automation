@@ -77,6 +77,11 @@ def safe_inventory(*groups: list[dict]) -> dict:
     )
 
 
+def write_evidence(evidence: dict) -> None:
+    EVIDENCE_PATH.write_text(json.dumps(evidence, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps(evidence, ensure_ascii=False, indent=2), flush=True)
+
+
 def main() -> int:
     try:
         from playwright.sync_api import sync_playwright
@@ -114,10 +119,34 @@ def main() -> int:
                 "session_reused": False,
                 "secrets_captured": False,
             }
-            EVIDENCE_PATH.write_text(json.dumps(evidence, ensure_ascii=False, indent=2), encoding="utf-8")
-            print(json.dumps(evidence, ensure_ascii=False, indent=2), flush=True)
+            write_evidence(evidence)
             context.close()
             return 32
+
+        print(
+            "Sessão validada. No navegador, abra a área usada para clipping/notícias e execute uma consulta conhecida. "
+            "A sonda guarda somente rotas sanitizadas e metadados JSON.",
+            flush=True,
+        )
+        input("Quando a consulta e os resultados estiverem carregados, pressione ENTER aqui... ")
+        page.wait_for_timeout(1500)
+        exploration_url = page.url
+        exploration_location = url_fingerprint(exploration_url)
+        if is_login_like_url(exploration_url):
+            evidence = {
+                "status": "BLOCKED",
+                "phase": "guided_exploration",
+                "initial_auth_mode": first.auth_mode,
+                "initial_location": url_fingerprint(authenticated_url),
+                "exploration_location": exploration_location,
+                "exploration_completed": False,
+                "network_inventory": safe_inventory(first_network),
+                "session_reused": False,
+                "secrets_captured": False,
+            }
+            write_evidence(evidence)
+            context.close()
+            return 34
 
         context.close()
 
@@ -138,6 +167,8 @@ def main() -> int:
             "initial_auth_mode": first.auth_mode,
             "reopened_auth_mode": second.auth_mode,
             "initial_location": url_fingerprint(authenticated_url),
+            "exploration_location": exploration_location,
+            "exploration_completed": True,
             "reopened_location": url_fingerprint(page2.url),
             "redirected_to_login": is_login_like_url(page2.url),
             "network_inventory": safe_inventory(first_network, second_network),
@@ -145,8 +176,7 @@ def main() -> int:
             "profile_persisted": True,
             "secrets_captured": False,
         }
-        EVIDENCE_PATH.write_text(json.dumps(evidence, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(json.dumps(evidence, ensure_ascii=False, indent=2), flush=True)
+        write_evidence(evidence)
         reopened.close()
 
     return 0 if evidence["status"] == "PASS" else 33
