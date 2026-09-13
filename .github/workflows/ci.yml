@@ -20,6 +20,8 @@ jobs:
           python-version: '3.12'
       - name: Validar ambiente portátil
         run: python scripts/local_doctor.py
+      - name: Validar plano do setup local
+        run: python tests/test_setup_local.py
       - name: Validar construção do pacote portátil
         run: python tests/test_build_portable.py
       - name: Gerar pacote portátil
