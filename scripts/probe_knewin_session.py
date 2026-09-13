@@ -24,6 +24,7 @@ PROFILE_DIR = Path(os.environ.get("KNEWIN_PROFILE_DIR", str(Path.home() / ".feca
 EVIDENCE_PATH = Path(os.environ.get("KNEWIN_AUTH_EVIDENCE", str(ROOT / "evidence" / "private" / "knewin-auth-probe.json")))
 OIDC_HINTS = ("login", "oauth", "oidc", "authorize", "identity", "auth", "sso")
 MAX_JSON_ENDPOINTS = 250
+MAX_NETWORK_OBSERVATIONS = 1000
 
 
 def collect(page, context, schemes: set[str], oidc_hosts: set[str]):
@@ -49,7 +50,7 @@ def attach_request_probe(context, schemes: set[str], oidc_hosts: set[str]) -> No
 
 def attach_response_probe(context, observations: list[dict]) -> None:
     def on_response(response) -> None:
-        if len(observations) >= MAX_JSON_ENDPOINTS:
+        if len(observations) >= MAX_NETWORK_OBSERVATIONS:
             return
         try:
             item = network_observation(
@@ -68,10 +69,15 @@ def attach_response_probe(context, observations: list[dict]) -> None:
 
 def safe_inventory(*groups: list[dict]) -> dict:
     endpoints = dedupe_network_observations(item for group in groups for item in group)
+    truncated = (
+        any(len(group) >= MAX_NETWORK_OBSERVATIONS for group in groups)
+        or len(endpoints) > MAX_JSON_ENDPOINTS
+    )
+    endpoints = endpoints[:MAX_JSON_ENDPOINTS]
     return {
         "json_endpoint_count": len(endpoints),
         "json_endpoints": endpoints,
-        "truncated": sum(len(group) for group in groups) >= MAX_JSON_ENDPOINTS,
+        "truncated": truncated,
         "secrets_captured": False,
     }
 
