@@ -9,6 +9,7 @@ SAFE_FIELD_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,79}$")
 MAX_DEPTH = 6
 MAX_FIELDS = 100
 MAX_ITEM_SHAPES = 4
+MAX_SCHEMA_BODY_BYTES = 1024 * 1024
 
 
 def _canonical_digest(value: Any) -> str:
@@ -72,6 +73,16 @@ def schema_observation(endpoint: dict, payload: Any) -> dict:
         "values_persisted": False,
         "secrets_captured": False,
     }
+
+
+def schema_observation_from_bytes(endpoint: dict, body: bytes, *, max_bytes: int = MAX_SCHEMA_BODY_BYTES) -> dict | None:
+    if max_bytes < 1 or len(body) > max_bytes:
+        return None
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return schema_observation(endpoint, payload)
 
 
 def dedupe_schema_observations(observations: Iterable[dict]) -> list[dict]:
