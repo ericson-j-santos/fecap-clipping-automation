@@ -22,6 +22,14 @@ jobs:
         run: python scripts/local_doctor.py
       - name: Validar construção do pacote portátil
         run: python tests/test_build_portable.py
+      - name: Gerar pacote portátil
+        run: python scripts/build_portable.py
+      - name: Publicar pacote portátil
+        uses: actions/upload-artifact@v4
+        with:
+          name: fecap-clipping-portable
+          path: dist/fecap-clipping-portable.zip
+          if-no-files-found: error
       - name: Validar contrato da API Knewin
         run: python tests/test_knewin_api.py
       - name: Validar sonda de autenticação sem segredos
