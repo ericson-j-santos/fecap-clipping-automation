@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from src.json_schema_probe import build_schema_inventory, schema_observation_from_bytes
 from src.session_auth_probe import (
     build_network_inventory,
     classify_auth,
@@ -25,6 +26,7 @@ EVIDENCE_PATH = Path(os.environ.get("KNEWIN_AUTH_EVIDENCE", str(ROOT / "evidence
 OIDC_HINTS = ("login", "oauth", "oidc", "authorize", "identity", "auth", "sso")
 MAX_JSON_ENDPOINTS = 250
 MAX_NETWORK_OBSERVATIONS = 1000
+MAX_SCHEMA_OBSERVATIONS = 100
 
 
 def collect(page, context, schemes: set[str], oidc_hosts: set[str]):
@@ -48,7 +50,7 @@ def attach_request_probe(context, schemes: set[str], oidc_hosts: set[str]) -> No
     context.on("request", on_request)
 
 
-def attach_response_probe(context, observations: list[dict]) -> None:
+def attach_response_probe(context, observations: list[dict], schema_observations: list[dict]) -> None:
     def on_response(response) -> None:
         if len(observations) >= MAX_NETWORK_OBSERVATIONS:
             return
@@ -61,8 +63,18 @@ def attach_response_probe(context, observations: list[dict]) -> None:
             )
         except Exception:
             return
-        if item["is_json"]:
-            observations.append(item)
+        if not item["is_json"]:
+            return
+        observations.append(item)
+
+        if len(schema_observations) >= MAX_SCHEMA_OBSERVATIONS or is_login_like_url(response.url):
+            return
+        try:
+            schema = schema_observation_from_bytes(item, response.body())
+        except Exception:
+            return
+        if schema is not None:
+            schema_observations.append(schema)
 
     context.on("response", on_response)
 
@@ -73,6 +85,16 @@ def safe_inventory(*groups: list[dict]) -> dict:
     return build_network_inventory(
         observations,
         max_entries=MAX_JSON_ENDPOINTS,
+        raw_truncated=raw_truncated,
+    )
+
+
+def safe_schema_inventory(*groups: list[dict]) -> dict:
+    observations = [item for group in groups for item in group]
+    raw_truncated = any(len(group) >= MAX_SCHEMA_OBSERVATIONS for group in groups)
+    return build_schema_inventory(
+        observations,
+        max_entries=MAX_SCHEMA_OBSERVATIONS,
         raw_truncated=raw_truncated,
     )
 
@@ -96,9 +118,10 @@ def main() -> int:
         first_schemes: set[str] = set()
         first_hosts: set[str] = set()
         first_network: list[dict] = []
+        first_schemas: list[dict] = []
         context = p.chromium.launch_persistent_context(str(PROFILE_DIR), headless=False, args=["--disable-sync"])
         attach_request_probe(context, first_schemes, first_hosts)
-        attach_response_probe(context, first_network)
+        attach_response_probe(context, first_network, first_schemas)
         page = context.pages[0] if context.pages else context.new_page()
         page.goto(PORTAL_URL, wait_until="domcontentloaded")
 
@@ -116,7 +139,9 @@ def main() -> int:
                 "initial_auth": first.to_dict(),
                 "initial_location": url_fingerprint(authenticated_url),
                 "network_inventory": safe_inventory(first_network),
+                "response_schema_inventory": safe_schema_inventory(first_schemas),
                 "session_reused": False,
+                "values_persisted": False,
                 "secrets_captured": False,
             }
             write_evidence(evidence)
@@ -125,7 +150,7 @@ def main() -> int:
 
         print(
             "Sessão validada. No navegador, abra a área usada para clipping/notícias e execute uma consulta conhecida. "
-            "A sonda guarda somente rotas sanitizadas e metadados JSON.",
+            "A sonda guarda somente rotas sanitizadas, tipos e nomes estruturais dos campos JSON; valores não são persistidos.",
             flush=True,
         )
         input("Quando a consulta e os resultados estiverem carregados, pressione ENTER aqui... ")
@@ -141,7 +166,9 @@ def main() -> int:
                 "exploration_location": exploration_location,
                 "exploration_completed": False,
                 "network_inventory": safe_inventory(first_network),
+                "response_schema_inventory": safe_schema_inventory(first_schemas),
                 "session_reused": False,
+                "values_persisted": False,
                 "secrets_captured": False,
             }
             write_evidence(evidence)
@@ -153,9 +180,10 @@ def main() -> int:
         second_schemes: set[str] = set()
         second_hosts: set[str] = set()
         second_network: list[dict] = []
+        second_schemas: list[dict] = []
         reopened = p.chromium.launch_persistent_context(str(PROFILE_DIR), headless=False, args=["--disable-sync"])
         attach_request_probe(reopened, second_schemes, second_hosts)
-        attach_response_probe(reopened, second_network)
+        attach_response_probe(reopened, second_network, second_schemas)
         page2 = reopened.pages[0] if reopened.pages else reopened.new_page()
         page2.goto(authenticated_url, wait_until="domcontentloaded")
         page2.wait_for_timeout(3000)
@@ -172,8 +200,10 @@ def main() -> int:
             "reopened_location": url_fingerprint(page2.url),
             "redirected_to_login": is_login_like_url(page2.url),
             "network_inventory": safe_inventory(first_network, second_network),
+            "response_schema_inventory": safe_schema_inventory(first_schemas, second_schemas),
             "session_reused": reuse_ok,
             "profile_persisted": True,
+            "values_persisted": False,
             "secrets_captured": False,
         }
         write_evidence(evidence)

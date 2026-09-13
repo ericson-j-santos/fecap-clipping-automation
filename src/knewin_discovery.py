@@ -82,3 +82,50 @@ def rank_candidates(endpoints: Iterable[dict], *, limit: int = 10) -> dict:
         "candidates": selected,
         "secrets_captured": False,
     }
+
+
+def attach_schema_evidence(candidates: Iterable[dict], schema_observations: Iterable[dict]) -> list[dict]:
+    index: dict[tuple, list[dict]] = {}
+    for item in schema_observations:
+        key = (
+            str(item.get("host") or ""),
+            str(item.get("path_sha256") or ""),
+            str(item.get("method") or ""),
+            item.get("status"),
+        )
+        schema = item.get("response_schema")
+        digest = str(item.get("response_schema_sha256") or "")
+        if not isinstance(schema, dict) or not digest:
+            continue
+        entry = {
+            "response_schema_sha256": digest,
+            "response_schema": schema,
+            "values_persisted": False,
+            "secrets_captured": False,
+        }
+        index.setdefault(key, []).append(entry)
+
+    enriched: list[dict] = []
+    for candidate in candidates:
+        key = (
+            str(candidate.get("host") or ""),
+            str(candidate.get("path_sha256") or ""),
+            str(candidate.get("method") or ""),
+            candidate.get("status"),
+        )
+        unique = {
+            item["response_schema_sha256"]: item
+            for item in index.get(key, [])
+        }
+        schemas = [unique[digest] for digest in sorted(unique)]
+        enriched.append(
+            {
+                **candidate,
+                "response_schema_count": len(schemas),
+                "response_schemas": schemas,
+                "schema_observed": bool(schemas),
+                "values_persisted": False,
+                "secrets_captured": False,
+            }
+        )
+    return enriched
