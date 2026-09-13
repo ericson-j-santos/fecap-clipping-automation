@@ -10,8 +10,9 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 - sonda de sessão e inventário sanitizado de endpoints JSON: implementados;
 - templates de rota com identificadores mascarados: implementados;
 - jornada guiada e ranking de endpoints candidatos: implementados;
-- plano do coletor vinculado à evidência por SHA-256: implementado;
-- coleta autenticada de notícias no portal Knewin: pendente de evidência real e validação do endpoint;
+- esquema estrutural das respostas JSON sem valores: implementado;
+- plano do coletor vinculado ao endpoint e aos esquemas observados por SHA-256: implementado;
+- coleta autenticada de notícias no portal Knewin: pendente de evidência real no notebook;
 - Excel/SharePoint de homologação: pendente.
 
 ## Regra inicial
@@ -30,9 +31,9 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 5. Inicie a sonda autenticada:
    `python scripts/probe_knewin_session.py`
 6. Após autenticar, navegue até a área real de clipping/notícias, execute uma consulta conhecida e confirme no terminal quando os resultados estiverem carregados.
-7. Classifique as rotas sanitizadas observadas:
+7. Classifique as rotas e esquemas sanitizados observados:
    `python scripts/analyze_knewin_inventory.py`
-8. Gere o plano fail-closed do coletor a partir do endpoint realmente observado:
+8. Gere o plano fail-closed do coletor a partir do endpoint e dos esquemas realmente observados:
    `python scripts/prepare_knewin_collector.py`
 
 Para apenas diagnosticar sem instalar dependências:
@@ -45,9 +46,9 @@ Para preparar sem instalar o Chromium:
 
 Não copie perfil Chromium, cookies, tokens, `localStorage`, `sessionStorage`, arquivos de `evidence/private` ou chaves da API Knewin entre computadores.
 
-A sonda Knewin grava em `evidence/private/knewin-auth-probe.json` apenas metadados sanitizados. O inventário de rede mantém host, template de rota mascarado, hash da rota, método, status e tipo MIME de respostas JSON; não grava URL completa, query string, cabeçalhos nem corpos. O analisador gera `evidence/private/knewin-endpoint-candidates.json` apenas a partir desses metadados.
+A sonda Knewin grava em `evidence/private/knewin-auth-probe.json` somente metadados sanitizados. Para respostas JSON de até 1 MiB, o corpo pode ser inspecionado em memória exclusivamente para extrair nomes estruturais de campos e tipos (`object`, `array`, `string`, `number`, etc.); valores escalares nunca são persistidos. Campos com nomes dinâmicos/inseguros são substituídos por hash. Respostas de login/SSO são excluídas dessa inspeção.
 
-`prepare_knewin_collector.py` não acessa a rede. Ele recusa evidência sem `PASS`, inventário truncado, rotas de autenticação, host fora do contexto Knewin, método não permitido, status não-2xx ou qualquer registro sem `secrets_captured=false`. Quando aprovado, gera `evidence/private/knewin-collector-plan.json` com `network_enabled=false` e um `evidence_binding_sha256` determinístico. A rede só deve ser habilitada em incremento posterior, depois da validação real do endpoint e do esquema de resposta.
+O analisador gera `evidence/private/knewin-endpoint-candidates.json` associando cada candidato às variantes estruturais observadas. `prepare_knewin_collector.py` não acessa a rede e recusa descoberta sem `PASS`, inventários truncados, rota de autenticação, host fora do contexto Knewin, método/status não permitidos, esquema ausente/adulterado ou qualquer evidência sem `values_persisted=false` e `secrets_captured=false`. Quando aprovado, gera `evidence/private/knewin-collector-plan.json` com `network_enabled=false` e `evidence_binding_sha256` determinístico.
 
 ## Pacote portátil
 
