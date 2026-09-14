@@ -10,6 +10,11 @@ MAX_DEPTH = 6
 MAX_FIELDS = 100
 MAX_ITEM_SHAPES = 4
 MAX_SCHEMA_BODY_BYTES = 1024 * 1024
+XSSI_PREFIXES = (
+    ")]}'",
+    "while(1);",
+    "for(;;);",
+)
 
 
 def _canonical_digest(value: Any) -> str:
@@ -75,11 +80,20 @@ def schema_observation(endpoint: dict, payload: Any) -> dict:
     }
 
 
+def _decode_json_body(body: bytes) -> Any:
+    text = body.decode("utf-8-sig").lstrip()
+    for prefix in XSSI_PREFIXES:
+        if text.startswith(prefix):
+            text = text[len(prefix):].lstrip(" \t\r\n;")
+            break
+    return json.loads(text)
+
+
 def schema_observation_from_bytes(endpoint: dict, body: bytes, *, max_bytes: int = MAX_SCHEMA_BODY_BYTES) -> dict | None:
     if max_bytes < 1 or len(body) > max_bytes:
         return None
     try:
-        payload = json.loads(body.decode("utf-8"))
+        payload = _decode_json_body(body)
     except (UnicodeDecodeError, json.JSONDecodeError):
         return None
     return schema_observation(endpoint, payload)
