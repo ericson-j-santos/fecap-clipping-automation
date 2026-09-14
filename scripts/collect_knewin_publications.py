@@ -19,6 +19,7 @@ from src.knewin_session_collector import (
     SessionCollectorError,
     build_run_evidence,
     functional_output,
+    session_reuse_ui_is_valid,
     validate_live_response,
     validate_runtime_gate,
 )
@@ -27,6 +28,7 @@ from src.session_auth_probe import is_login_like_url, url_fingerprint
 DEFAULT_RUNTIME_EVIDENCE = ROOT / "evidence" / "private" / "knewin-runtime-validation.json"
 DEFAULT_OUTPUT = ROOT / "data" / "private" / "knewin-fecap-items.json"
 DEFAULT_RUN_EVIDENCE = ROOT / "evidence" / "private" / "knewin-authenticated-collector-run.json"
+SESSION_REUSE_TIMEOUT_SECONDS = 30
 
 
 def _is_target(response) -> bool:
@@ -66,6 +68,23 @@ def _blocked(path: Path, phase: str, **extra) -> int:
     _write_json(path, payload)
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 50
+
+
+def _wait_for_reusable_session(page, context, schemes: set[str], hosts: set[str]):
+    deadline = time.monotonic() + SESSION_REUSE_TIMEOUT_SECONDS
+    last_auth = None
+    last_nav_meta: dict = {}
+    while time.monotonic() < deadline:
+        try:
+            last_auth = base.collect(page, context, schemes, hosts)
+            nav, nav_meta = auto.choose_navigation(page)
+            last_nav_meta = nav_meta
+            if session_reuse_ui_is_valid(last_auth.auth_mode, nav_meta):
+                return last_auth, nav, nav_meta, is_login_like_url(page.url)
+        except Exception:
+            pass
+        page.wait_for_timeout(1000)
+    return last_auth, None, last_nav_meta, is_login_like_url(page.url)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -116,14 +135,21 @@ def main() -> int:
             page = context.pages[0] if context.pages else context.new_page()
             page.goto(base.PORTAL_URL, wait_until="domcontentloaded")
             page.wait_for_timeout(2500)
-            auth = auto.wait_for_auth(page, context, schemes, hosts, news.AUTH_TIMEOUT_SECONDS)
-            if auth is None or auth.auth_mode == "unknown" or is_login_like_url(page.url):
-                return _blocked(ns.evidence, "initial_authentication", human_login_required=True)
 
-            nav, nav_meta = auto.choose_navigation(page)
-            if nav is not None:
-                nav.click()
-                page.wait_for_timeout(3000)
+            auth, nav, nav_meta, stale_login_fragment = _wait_for_reusable_session(
+                page, context, schemes, hosts
+            )
+            if auth is None or nav is None or not session_reuse_ui_is_valid(auth.auth_mode, nav_meta):
+                return _blocked(
+                    ns.evidence,
+                    "initial_authentication",
+                    human_login_required=True,
+                    navigation=nav_meta,
+                    login_like_url=is_login_like_url(page.url),
+                )
+
+            nav.click()
+            page.wait_for_timeout(3000)
             field, search_meta = news.choose_search_field(page)
             if field is None:
                 return _blocked(ns.evidence, "query_field_discovery", navigation=nav_meta, search=search_meta)
@@ -150,7 +176,7 @@ def main() -> int:
             try:
                 payload = response.json()
                 publications, response_shape = validate_live_response(runtime, response.status, payload)
-            except (SessionCollectorError, Exception) as exc:
+            except Exception as exc:
                 return _blocked(
                     ns.evidence,
                     "response_validation",
@@ -168,6 +194,7 @@ def main() -> int:
             run_evidence["auth_mode"] = auth.auth_mode
             run_evidence["location"] = url_fingerprint(page.url)
             run_evidence["human_login_required"] = False
+            run_evidence["stale_login_fragment_accepted"] = stale_login_fragment
             run_evidence["functional_output_path"] = str(ns.output)
             _write_json(ns.evidence, run_evidence)
             print(json.dumps(run_evidence, ensure_ascii=False, indent=2))

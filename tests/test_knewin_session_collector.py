@@ -13,6 +13,7 @@ from src.knewin_session_collector import (
     build_run_evidence,
     functional_output,
     normalize_publications,
+    session_reuse_ui_is_valid,
     validate_live_response,
     validate_runtime_gate,
 )
@@ -76,6 +77,14 @@ def sample_payload() -> dict:
 
 
 def main() -> int:
+    search_nav = {"candidate_count": 1, "top_score": 135, "ambiguous": False}
+    assert session_reuse_ui_is_valid("oidc", search_nav) is True
+    assert session_reuse_ui_is_valid("cookie", search_nav) is True
+    assert session_reuse_ui_is_valid("unknown", search_nav) is False
+    assert session_reuse_ui_is_valid("oidc", {"candidate_count": 1, "top_score": 75, "ambiguous": False}) is False
+    assert session_reuse_ui_is_valid("oidc", {"candidate_count": 2, "top_score": 135, "ambiguous": True}) is False
+    assert session_reuse_ui_is_valid("oidc", None) is False
+
     payload = sample_payload()
     runtime = runtime_for(payload)
     expected_shape = validate_runtime_gate(runtime)

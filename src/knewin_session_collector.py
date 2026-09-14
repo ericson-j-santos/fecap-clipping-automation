@@ -39,6 +39,24 @@ def _digest(value: object) -> str:
     return sha256(raw).hexdigest()
 
 
+def session_reuse_ui_is_valid(auth_mode: str, navigation_meta: object) -> bool:
+    """Aceita reuso somente com autenticação e navegação Busca/Pesquisa inequívoca."""
+    if str(auth_mode or "").casefold() == "unknown":
+        return False
+    if not isinstance(navigation_meta, dict):
+        return False
+    count = navigation_meta.get("candidate_count")
+    score = navigation_meta.get("top_score")
+    ambiguous = navigation_meta.get("ambiguous")
+    return (
+        isinstance(count, int)
+        and count >= 1
+        and isinstance(score, int)
+        and score >= 125
+        and ambiguous is False
+    )
+
+
 def validate_runtime_gate(runtime: dict) -> dict:
     if not isinstance(runtime, dict) or runtime.get("status") != "RUNTIME_VALIDATED":
         raise SessionCollectorError("runtime ainda não está validado")
