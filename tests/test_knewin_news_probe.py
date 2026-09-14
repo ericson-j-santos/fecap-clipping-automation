@@ -13,6 +13,32 @@ def main() -> int:
     assert probe_knewin_news.AUTH_TIMEOUT_SECONDS == 600
     assert is_login_like_url("https://news.knewin.com/#/login") is True
     assert is_login_like_url("https://news.knewin.com/#/home") is False
+
+    selected, meta = probe_knewin_news.choose_saved_search_name([
+        {"name": "FECAP - Clipping"},
+        {"name": "Concorrentes"},
+    ])
+    assert selected == "FECAP - Clipping"
+    assert meta == {
+        "mode": "saved_search",
+        "saved_search_count": 2,
+        "fecap_match_count": 1,
+        "selected": True,
+    }
+
+    selected, meta = probe_knewin_news.choose_saved_search_name([
+        {"name": "FECAP - Geral"},
+        {"name": "FECAP - Professores"},
+    ])
+    assert selected is None
+    assert meta["fecap_match_count"] == 2
+    assert meta["selected"] is False
+
+    selected, meta = probe_knewin_news.choose_saved_search_name([{"name": "Mercado"}])
+    assert selected is None
+    assert meta["fecap_match_count"] == 0
+    assert meta["selected"] is False
+
     print("knewin news probe tests: PASS")
     return 0
 
