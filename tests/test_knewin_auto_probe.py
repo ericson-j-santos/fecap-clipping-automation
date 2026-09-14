@@ -8,6 +8,7 @@ sys.path.insert(0, str(ROOT))
 
 from scripts.probe_knewin_session_auto import (
     is_safe_text_fallback,
+    is_text_capable_control,
     normalize_label,
     score_field_context,
     score_navigation_label,
@@ -33,15 +34,33 @@ def main() -> int:
     assert score_field_context("Query") == 50
     assert score_field_context("Data inicial") == 0
 
-    # Baseline do vídeo de 11/09/2026: Busca -> Avançada -> textarea "Buscar por *".
-    assert score_video_baseline_query_field("textarea", "Buscar por *") == 200
-    assert score_video_baseline_query_field("textarea", "") == 100
-    assert score_video_baseline_query_field("textarea", "Observações") == 100
-    assert score_video_baseline_query_field("input", "Buscar por *") == 0
+    # Baseline funcional do vídeo: o campo "Buscar por *" pode mudar de tag,
+    # mas continua sendo um controle textual grande/multilinha.
+    attrs_text = {"type": "text", "role": None, "contenteditable": None}
+    attrs_editable = {"type": None, "role": "textbox", "contenteditable": "true"}
+    attrs_password = {"type": "password", "role": None, "contenteditable": None}
+
+    assert is_text_capable_control(attrs_text, "input") is True
+    assert is_text_capable_control(attrs_editable, "div") is True
+    assert is_text_capable_control(attrs_password, "input") is False
+
+    assert score_video_baseline_query_field(
+        "input", attrs_text, "Buscar por *", width=180, height=100
+    ) >= 300
+    assert score_video_baseline_query_field(
+        "div", attrs_editable, "", width=180, height=100
+    ) >= 180
+    assert score_video_baseline_query_field(
+        "input", attrs_text, "", width=100, height=30
+    ) == 0
+    assert score_video_baseline_query_field(
+        "input", attrs_password, "Buscar por *", width=180, height=100
+    ) == 0
 
     assert is_safe_text_fallback({"type": "text"}, "input") is True
     assert is_safe_text_fallback({"type": ""}, "input") is True
     assert is_safe_text_fallback({"type": "text"}, "textarea") is True
+    assert is_safe_text_fallback({"type": None, "role": "textbox", "contenteditable": "true"}, "div") is True
     assert is_safe_text_fallback({"type": "password"}, "input") is False
     assert is_safe_text_fallback({"type": "email"}, "input") is False
     assert is_safe_text_fallback({"type": "date"}, "input") is False
