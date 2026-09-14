@@ -6,7 +6,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from scripts.probe_knewin_session_auto import normalize_label, score_navigation_label, score_search_attrs
+from scripts.probe_knewin_session_auto import (
+    is_safe_text_fallback,
+    normalize_label,
+    score_navigation_label,
+    score_search_attrs,
+)
 
 
 def main() -> int:
@@ -20,6 +25,13 @@ def main() -> int:
     assert score_search_attrs({"type": "text", "aria-label": "Pesquisar"}) == 40
     assert score_search_attrs({"type": "password", "placeholder": "Buscar"}) == 0
     assert score_search_attrs({"type": "email", "aria-label": "Pesquisar"}) == 0
+
+    assert is_safe_text_fallback({"type": "text"}, "input") is True
+    assert is_safe_text_fallback({"type": ""}, "input") is True
+    assert is_safe_text_fallback({"type": "text"}, "textarea") is True
+    assert is_safe_text_fallback({"type": "password"}, "input") is False
+    assert is_safe_text_fallback({"type": "email"}, "input") is False
+    assert is_safe_text_fallback({"type": "date"}, "input") is False
 
     print("knewin auto probe tests: PASS")
     return 0
