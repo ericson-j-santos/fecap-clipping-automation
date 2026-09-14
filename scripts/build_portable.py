@@ -27,6 +27,7 @@ SAFE_FILES = (
     "scripts/probe_knewin_session.py",
     "scripts/probe_knewin_session_auto.py",
     "scripts/probe_knewin_news.py",
+    "scripts/probe_knewin_news_guided.py",
     "scripts/e2e_live_knewin.py",
     "tests/e2e_public_news.py",
     "tests/test_json_schema_probe.py",
@@ -35,6 +36,7 @@ SAFE_FILES = (
     "tests/test_knewin_collector_plan.py",
     "tests/test_knewin_discovery.py",
     "tests/test_knewin_news_probe.py",
+    "tests/test_knewin_guided_probe.py",
     "tests/test_session_auth_probe.py",
 )
 
