@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from hashlib import sha256
 import json
 
-from clipping import Candidate
-from json_schema_probe import json_shape
-from knewin_runtime_validation import (
+from src.clipping import Candidate
+from src.json_schema_probe import json_shape
+from src.knewin_runtime_validation import (
     TARGET_HOST,
     TARGET_METHOD,
     TARGET_ROUTE,
