@@ -12,7 +12,8 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 - jornada guiada e ranking de endpoints candidatos: implementados;
 - esquema estrutural das respostas JSON sem valores: implementado;
 - plano do coletor vinculado ao endpoint e aos esquemas observados por SHA-256: implementado;
-- coleta autenticada de notícias no portal Knewin: pendente de evidência real no notebook;
+- sonda automática para `https://news.knewin.com/#/login`: implementada;
+- coleta autenticada de notícias no portal Knewin: pendente de evidência real no desktop/notebook pessoal;
 - Excel/SharePoint de homologação: pendente.
 
 ## Regra inicial
@@ -28,9 +29,9 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
    `python scripts/setup_local.py`
 4. Execute o E2E público:
    `python tests/e2e_public_news.py`
-5. Inicie a sonda autenticada:
-   `python scripts/probe_knewin_session.py`
-6. Após autenticar, navegue até a área real de clipping/notícias, execute uma consulta conhecida e confirme no terminal quando os resultados estiverem carregados.
+5. Inicie a sonda autenticada automática no portal correto do Knewin News:
+   `python scripts/probe_knewin_news.py`
+6. Faça somente o login humano quando solicitado pelo portal. A sonda espera até 10 minutos, detecta a saída de `#/login` e tenta localizar de forma fail-closed a área de clipping/notícias e o campo de busca.
 7. Classifique as rotas e esquemas sanitizados observados:
    `python scripts/analyze_knewin_inventory.py`
 8. Gere o plano fail-closed do coletor a partir do endpoint e dos esquemas realmente observados:
