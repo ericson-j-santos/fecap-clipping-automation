@@ -23,6 +23,9 @@ NAVIGATION_TERMS = (
     ("monitoramento", 70),
 )
 SEARCH_TERMS = ("buscar", "busca", "pesquisar", "pesquisa", "termo", "palavra", "search")
+FIELD_CONTEXT_TERMS = SEARCH_TERMS + (
+    "consulta", "consultar", "query", "keyword", "palavra-chave", "expressão", "expressao", "conteúdo", "conteudo",
+)
 SUBMIT_TERMS = ("buscar", "pesquisar", "consultar", "aplicar")
 SENSITIVE_FIELD_TYPES = {"password", "email", "hidden", "checkbox", "radio", "file"}
 TEXT_FALLBACK_TYPES = {"", "text"}
@@ -58,6 +61,24 @@ def score_search_attrs(attrs: dict[str, str | None]) -> int:
         if any(term in value for term in SEARCH_TERMS):
             score += 40
     return score
+
+
+def score_field_context(value: str | None) -> int:
+    text = normalize_label(value)
+    return 50 if any(term in text for term in FIELD_CONTEXT_TERMS) else 0
+
+
+def associated_field_text(item) -> str:
+    try:
+        return str(item.evaluate("""el => {
+            const parts = [];
+            if (el.labels) for (const label of Array.from(el.labels)) parts.push(label.innerText || label.textContent || '');
+            const parent = el.closest('label');
+            if (parent) parts.push(parent.innerText || parent.textContent || '');
+            return parts.join(' ');
+        }""") or "")
+    except Exception:
+        return ""
 
 
 def is_safe_text_fallback(attrs: dict[str, str | None], tag_name: str) -> bool:
@@ -129,6 +150,7 @@ def choose_search_field(page):
     locator = page.locator("input,textarea,[role='searchbox']")
     candidates = []
     fallbacks = []
+    context_match_count = 0
     for index in range(min(locator.count(), 200)):
         item = locator.nth(index)
         try:
@@ -146,6 +168,10 @@ def choose_search_field(page):
         except Exception:
             continue
         score = score_search_attrs(attrs)
+        context_score = score_field_context(associated_field_text(item))
+        if context_score:
+            context_match_count += 1
+            score += context_score
         if score:
             candidates.append((score, index, item))
         elif is_safe_text_fallback(attrs, str(tag_name)):
@@ -159,6 +185,7 @@ def choose_search_field(page):
             "top_score": top_score,
             "ambiguous": len(tied) != 1,
             "selection_mode": "scored",
+            "context_match_count": context_match_count,
             "fallback_candidate_count": len(fallbacks),
         }
         return (tied[0][2] if len(tied) == 1 else None), meta
@@ -167,6 +194,7 @@ def choose_search_field(page):
         "top_score": 0,
         "ambiguous": len(fallbacks) > 1,
         "selection_mode": "unique_text_fallback" if len(fallbacks) == 1 else "none",
+        "context_match_count": context_match_count,
         "fallback_candidate_count": len(fallbacks),
     }
     return (fallbacks[0][1] if len(fallbacks) == 1 else None), meta
