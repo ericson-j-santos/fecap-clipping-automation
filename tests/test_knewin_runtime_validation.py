@@ -8,7 +8,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.json_schema_probe import json_shape
-from src.knewin_runtime_validation import build_runtime_validation, sanitize_request_contract, shape_compatible
+from src.knewin_runtime_validation import (
+    build_runtime_validation,
+    headers_for_replay,
+    sanitize_request_contract,
+    shape_compatible,
+)
 
 
 def plan_for(payload: object) -> dict:
@@ -30,9 +35,14 @@ def plan_for(payload: object) -> dict:
 def main() -> int:
     request_payload = {"query": "Fecap", "offset": 0, "filters": {"language": "pt"}}
     headers = {
+        ":authority": "news.knewin.com",
+        ":method": "POST",
         "Authorization": "Bearer SECRET-NOT-TO-PERSIST",
         "Cookie": "session=SECRET",
+        "Content-Length": "999",
+        "Accept-Encoding": "gzip",
         "Content-Type": "application/json; charset=utf-8",
+        "SessionInfo": "SESSION-SECRET",
         "X-Client": "web",
     }
     contract = sanitize_request_contract(
@@ -43,11 +53,19 @@ def main() -> int:
     )
     serialized = json.dumps(contract, ensure_ascii=False)
     assert "SECRET-NOT-TO-PERSIST" not in serialized and "session=SECRET" not in serialized
+    assert "SESSION-SECRET" not in serialized
     assert contract["route_template"] == "/restful/search/publications"
     assert contract["body_format"] == "json"
     assert contract["authorization_present"] is True and contract["cookie_present"] is True
     assert contract["body_schema"]["fields"]["query"]["type"] == "string"
     assert contract["values_persisted"] is False and contract["secrets_captured"] is False
+
+    replay_headers = headers_for_replay(headers)
+    assert ":authority" not in replay_headers and ":method" not in replay_headers
+    assert "content-length" not in replay_headers and "accept-encoding" not in replay_headers
+    assert replay_headers["authorization"] == "Bearer SECRET-NOT-TO-PERSIST"
+    assert replay_headers["cookie"] == "session=SECRET"
+    assert replay_headers["sessioninfo"] == "SESSION-SECRET"
 
     observed_response = {
         "count": 1,

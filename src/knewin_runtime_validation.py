@@ -10,7 +10,7 @@ TARGET_HOST = "news.knewin.com"
 TARGET_ROUTE = "/restful/search/publications"
 TARGET_METHOD = "POST"
 MAX_HEADER_NAMES = 100
-SENSITIVE_HEADER_NAMES = {"authorization", "cookie", "proxy-authorization"}
+REPLAY_TRANSPORT_HEADERS = {"content-length", "host", "connection", "transfer-encoding", "accept-encoding"}
 
 
 def _digest(value: object) -> str:
@@ -21,6 +21,17 @@ def _digest(value: object) -> str:
 def _route(url: str) -> tuple[str, str]:
     parsed = urlparse(url)
     return (parsed.hostname or "").casefold(), parsed.path.rstrip("/") or "/"
+
+
+def headers_for_replay(headers: dict[str, str]) -> dict[str, str]:
+    """Mantém valores apenas em memória e remove cabeçalhos controlados pelo transporte HTTP."""
+    clean: dict[str, str] = {}
+    for key, value in headers.items():
+        name = str(key).casefold().strip()
+        if not name or name.startswith(":") or name in REPLAY_TRANSPORT_HEADERS:
+            continue
+        clean[name] = str(value)
+    return clean
 
 
 def sanitize_request_contract(url: str, method: str, headers: dict[str, str], body: bytes | None) -> dict:

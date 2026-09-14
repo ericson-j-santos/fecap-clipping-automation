@@ -18,6 +18,7 @@ from src.knewin_runtime_validation import (
     TARGET_METHOD,
     TARGET_ROUTE,
     build_runtime_validation,
+    headers_for_replay,
     sanitize_request_contract,
 )
 from src.session_auth_probe import is_login_like_url, url_fingerprint
@@ -49,13 +50,6 @@ def _blocked(output: Path, phase: str, **extra) -> int:
     }
     payload.update(extra)
     return _write(output, payload)
-
-
-def _replay_headers(request) -> dict[str, str]:
-    headers = dict(request.all_headers())
-    for name in ("content-length", "host", "connection"):
-        headers.pop(name, None)
-    return headers
 
 
 def main() -> int:
@@ -135,6 +129,7 @@ def main() -> int:
             raw_headers = dict(request.all_headers())
             body = request.post_data_buffer
             contract = sanitize_request_contract(request.url, request.method, raw_headers, body)
+            replay_headers = headers_for_replay(raw_headers)
         except Exception as exc:
             context.close()
             return _blocked(ns.output, "request_contract_capture", error_type=type(exc).__name__)
@@ -143,7 +138,7 @@ def main() -> int:
             replay = context.request.fetch(
                 request.url,
                 method=request.method,
-                headers=_replay_headers(request),
+                headers=replay_headers,
                 data=body,
                 fail_on_status_code=False,
                 timeout=30000,
