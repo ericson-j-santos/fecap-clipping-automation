@@ -18,6 +18,7 @@ SAFE_FILES = (
     "src/knewin_api.py",
     "src/knewin_collector_plan.py",
     "src/knewin_discovery.py",
+    "src/knewin_runtime_validation.py",
     "src/session_auth_probe.py",
     "scripts/analyze_knewin_inventory.py",
     "scripts/build_portable.py",
@@ -28,6 +29,7 @@ SAFE_FILES = (
     "scripts/probe_knewin_session_auto.py",
     "scripts/probe_knewin_news.py",
     "scripts/probe_knewin_news_guided.py",
+    "scripts/validate_knewin_publications_runtime.py",
     "scripts/e2e_live_knewin.py",
     "tests/e2e_public_news.py",
     "tests/test_json_schema_probe.py",
@@ -37,6 +39,7 @@ SAFE_FILES = (
     "tests/test_knewin_discovery.py",
     "tests/test_knewin_news_probe.py",
     "tests/test_knewin_guided_probe.py",
+    "tests/test_knewin_runtime_validation.py",
     "tests/test_session_auth_probe.py",
 )
 
