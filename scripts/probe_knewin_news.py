@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
 import scripts.probe_knewin_session as base
 import scripts.probe_knewin_session_auto as auto
 
@@ -13,6 +19,9 @@ def configure() -> None:
 
 
 def main() -> int:
+    if "--check" in sys.argv:
+        print(f"portal={PORTAL_URL} timeout={AUTH_TIMEOUT_SECONDS}")
+        return 0
     configure()
     return auto.main()
 
