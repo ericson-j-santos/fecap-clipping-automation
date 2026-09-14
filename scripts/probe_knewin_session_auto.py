@@ -164,6 +164,7 @@ def blocked_evidence(phase: str, auth, page, network, schemas, **extra) -> dict:
         "location": url_fingerprint(page.url),
         "network_inventory": base.safe_inventory(network),
         "response_schema_inventory": base.safe_schema_inventory(schemas),
+        "schema_probe_diagnostics": base.safe_schema_diagnostics(),
         "session_reused": False,
         "values_persisted": False,
         "secrets_captured": False,
@@ -173,6 +174,7 @@ def blocked_evidence(phase: str, auth, page, network, schemas, **extra) -> dict:
 
 
 def main() -> int:
+    base.SCHEMA_DIAGNOSTICS.clear()
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -271,6 +273,7 @@ def main() -> int:
             "query_json_observations": new_json_observations,
             "network_inventory": base.safe_inventory(network, second_network),
             "response_schema_inventory": base.safe_schema_inventory(schemas, second_schemas),
+            "schema_probe_diagnostics": base.safe_schema_diagnostics(),
             "session_reused": reuse_ok,
             "profile_persisted": True,
             "values_persisted": False,
