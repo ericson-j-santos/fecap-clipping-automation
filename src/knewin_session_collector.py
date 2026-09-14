@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from hashlib import sha256
 import json
-from typing import Any
 
 from clipping import Candidate
 from json_schema_probe import json_shape
@@ -23,10 +22,6 @@ class SessionCollectorError(ValueError):
 class CollectedPublication:
     external_id: str
     candidate: Candidate
-    author: str | None = None
-    domain: str | None = None
-    collection: str | None = None
-    terms: tuple[str, ...] = ()
 
     def to_dict(self) -> dict:
         return {
@@ -36,10 +31,6 @@ class CollectedPublication:
             "source": self.candidate.source,
             "published_at": self.candidate.published_at,
             "text": self.candidate.text,
-            "author": self.author,
-            "domain": self.domain,
-            "collection": self.collection,
-            "terms": list(self.terms),
         }
 
 
@@ -93,8 +84,6 @@ def publication_from_item(item: object) -> CollectedPublication:
     source = _required_text(item, "source")
     published_at = _required_text(item, "publishedDate")
     content = str(item.get("content") or "").strip()
-    terms_value = item.get("terms")
-    terms = tuple(str(value) for value in terms_value if isinstance(value, str)) if isinstance(terms_value, list) else ()
     return CollectedPublication(
         external_id=external_id,
         candidate=Candidate(
@@ -104,10 +93,6 @@ def publication_from_item(item: object) -> CollectedPublication:
             published_at=published_at,
             text=content,
         ),
-        author=str(item.get("author") or "").strip() or None,
-        domain=str(item.get("domain") or "").strip() or None,
-        collection=str(item.get("collection") or "").strip() or None,
-        terms=terms,
     )
 
 
