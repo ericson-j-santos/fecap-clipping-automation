@@ -15,50 +15,38 @@ def main() -> int:
     assert is_login_like_url("https://news.knewin.com/#/home") is False
 
     names = probe_knewin_news.extract_saved_search_names([
-        {"name": "FECAP - Clipping", "id": 123}, {"name": "Concorrentes", "id": 456},
-        {"name": ""}, {"other": "x"},
+        {"name":"FECAP - Clipping"},{"name":"Concorrentes"},{"name":""},{"other":"x"}
     ])
     assert names == ["FECAP - Clipping", "Concorrentes"]
 
     selected, meta = probe_knewin_news.choose_saved_search_name(
-        [{"name": "FECAP - Clipping"}, {"name": "Concorrentes"}], ["Pessoa Um"]
-    )
+        [{"name":"FECAP - Clipping"},{"name":"Mercado"}], ["Graduação"])
     assert selected == "FECAP - Clipping"
     assert meta["match_strategy"] == "fecap_label" and meta["selected"] is True
 
     selected, meta = probe_knewin_news.choose_saved_search_name(
-        [{"name": "FECAP - Geral"}, {"name": "FECAP - Professores"}], ["Pessoa Um"]
-    )
-    assert selected is None
-    assert meta["match_strategy"] == "ambiguous_fecap_label"
-    assert meta["fecap_match_count"] == 2 and meta["selected"] is False
+        [{"name":"Monitoramento - Extensão"},{"name":"Mercado"}], ["Ahmed El Khatib","Extensão"])
+    assert selected == "Monitoramento - Extensão"
+    assert meta["match_strategy"] == "configured_term"
+    assert meta["configured_term_count"] == 2
+    assert meta["configured_term_match_count"] == 1 and meta["selected"] is True
 
     selected, meta = probe_knewin_news.choose_saved_search_name(
-        [{"name": "Monitoramento - Ahmed El Khatib"}, {"name": "Mercado"}],
-        ["Ahmed El Khatib", "Rosely Schwartz"],
-    )
-    assert selected == "Monitoramento - Ahmed El Khatib"
-    assert meta["match_strategy"] == "configured_person"
-    assert meta["configured_person_count"] == 2
-    assert meta["person_match_count"] == 1 and meta["selected"] is True
+        [{"name":"Graduação - A"},{"name":"Extensão - B"}], ["Graduação","Extensão"])
+    assert selected is None
+    assert meta["configured_term_match_count"] == 2 and meta["selected"] is False
 
     selected, meta = probe_knewin_news.choose_saved_search_name(
-        [{"name": "Ahmed El Khatib - Geral"}, {"name": "Rosely Schwartz - Geral"}],
-        ["Ahmed El Khatib", "Rosely Schwartz"],
-    )
+        [{"name":"Mercado"}], ["Graduação","Extensão"])
     assert selected is None
-    assert meta["person_match_count"] == 2 and meta["selected"] is False
+    assert meta["configured_term_match_count"] == 0 and meta["selected"] is False
 
-    selected, meta = probe_knewin_news.choose_saved_search_name(
-        [{"name": "Mercado"}], ["Ahmed El Khatib", "Rosely Schwartz"]
-    )
-    assert selected is None
-    assert meta["fecap_match_count"] == 0
-    assert meta["person_match_count"] == 0
-    assert meta["selected"] is False
-
-    assert probe_knewin_news.extract_saved_search_names({"name": "FECAP"}) == []
-    assert len(probe_knewin_news.configured_person_names()) >= 1
+    assert probe_knewin_news.extract_saved_search_names({"name":"FECAP"}) == []
+    terms = probe_knewin_news.configured_search_terms()
+    assert "Ahmed El Khatib" in terms
+    assert "Rosely Schwartz" in terms
+    assert "Graduação" in terms
+    assert "Extensão" in terms
     print("knewin news probe tests: PASS")
     return 0
 
