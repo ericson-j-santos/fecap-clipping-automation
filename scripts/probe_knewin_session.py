@@ -27,6 +27,16 @@ OIDC_HINTS = ("login", "oauth", "oidc", "authorize", "identity", "auth", "sso")
 MAX_JSON_ENDPOINTS = 250
 MAX_NETWORK_OBSERVATIONS = 1000
 MAX_SCHEMA_OBSERVATIONS = 100
+DEFAULT_SCHEMA_BODY_BYTES = 1024 * 1024
+KNEWIN_NEWSSTREAM_SCHEMA_BODY_BYTES = 8 * 1024 * 1024
+
+
+def schema_body_limit(endpoint: dict) -> int:
+    host = str(endpoint.get("host") or "").casefold()
+    route = str(endpoint.get("route_template") or "")
+    if host == "news.knewin.com" and route.startswith("/newsstream/"):
+        return KNEWIN_NEWSSTREAM_SCHEMA_BODY_BYTES
+    return DEFAULT_SCHEMA_BODY_BYTES
 
 
 def collect(page, context, schemes: set[str], oidc_hosts: set[str]):
@@ -70,7 +80,11 @@ def attach_response_probe(context, observations: list[dict], schema_observations
         if len(schema_observations) >= MAX_SCHEMA_OBSERVATIONS or is_login_like_url(response.url):
             return
         try:
-            schema = schema_observation_from_bytes(item, response.body())
+            schema = schema_observation_from_bytes(
+                item,
+                response.body(),
+                max_bytes=schema_body_limit(item),
+            )
         except Exception:
             return
         if schema is not None:
