@@ -59,7 +59,7 @@ def header_scheme(value: str | None) -> str | None:
 
 def is_login_like_url(url: str) -> bool:
     parsed = urlparse(url)
-    text = f"{parsed.hostname or ''}{parsed.path}".lower()
+    text = f"{parsed.hostname or ''}{parsed.path}{parsed.fragment}".lower()
     return any(marker in text for marker in ("login", "signin", "sign-in", "oauth", "oidc", "authorize", "sso"))
 
 
