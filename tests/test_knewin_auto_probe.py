@@ -12,6 +12,7 @@ from scripts.probe_knewin_session_auto import (
     score_field_context,
     score_navigation_label,
     score_search_attrs,
+    score_video_baseline_query_field,
 )
 
 
@@ -31,6 +32,12 @@ def main() -> int:
     assert score_field_context("Termo da consulta") == 50
     assert score_field_context("Query") == 50
     assert score_field_context("Data inicial") == 0
+
+    # Baseline do vídeo de 11/09/2026: Busca -> Avançada -> textarea "Buscar por *".
+    assert score_video_baseline_query_field("textarea", "Buscar por *") == 200
+    assert score_video_baseline_query_field("textarea", "") == 100
+    assert score_video_baseline_query_field("textarea", "Observações") == 100
+    assert score_video_baseline_query_field("input", "Buscar por *") == 0
 
     assert is_safe_text_fallback({"type": "text"}, "input") is True
     assert is_safe_text_fallback({"type": ""}, "input") is True

@@ -26,6 +26,7 @@ SEARCH_TERMS = ("buscar", "busca", "pesquisar", "pesquisa", "termo", "palavra", 
 FIELD_CONTEXT_TERMS = SEARCH_TERMS + (
     "consulta", "consultar", "query", "keyword", "palavra-chave", "expressão", "expressao", "conteúdo", "conteudo",
 )
+VIDEO_BASELINE_QUERY_LABELS = ("buscar por",)
 SUBMIT_TERMS = ("buscar", "pesquisar", "consultar", "aplicar")
 SENSITIVE_FIELD_TYPES = {"password", "email", "hidden", "checkbox", "radio", "file"}
 TEXT_FALLBACK_TYPES = {"", "text"}
@@ -66,6 +67,19 @@ def score_search_attrs(attrs: dict[str, str | None]) -> int:
 def score_field_context(value: str | None) -> int:
     text = normalize_label(value)
     return 50 if any(term in text for term in FIELD_CONTEXT_TERMS) else 0
+
+
+def score_video_baseline_query_field(tag_name: str, associated_text: str | None) -> int:
+    """Prioriza o padrão observado no vídeo: textarea grande rotulado 'Buscar por *'."""
+    if tag_name.casefold() != "textarea":
+        return 0
+    label = normalize_label(associated_text).replace("*", "").strip()
+    if any(term in label for term in VIDEO_BASELINE_QUERY_LABELS):
+        return 200
+    # O vídeo mostra um único textarea de consulta. Se o HTML não expuser o
+    # rótulo semanticamente, ainda damos preferência estrutural ao textarea.
+    # Havendo mais de um textarea com o mesmo escore, o fluxo continua fail-closed.
+    return 100
 
 
 def associated_field_text(item) -> str:
@@ -151,6 +165,8 @@ def choose_search_field(page):
     candidates = []
     fallbacks = []
     context_match_count = 0
+    textarea_candidate_count = 0
+    video_baseline_match_count = 0
     for index in range(min(locator.count(), 200)):
         item = locator.nth(index)
         try:
@@ -164,37 +180,53 @@ def choose_search_field(page):
                 "name": item.get_attribute("name"),
                 "title": item.get_attribute("title"),
             }
-            tag_name = item.evaluate("el => el.tagName.toLowerCase()")
+            tag_name = str(item.evaluate("el => el.tagName.toLowerCase()"))
         except Exception:
             continue
+
+        associated_text = associated_field_text(item)
         score = score_search_attrs(attrs)
-        context_score = score_field_context(associated_field_text(item))
+        context_score = score_field_context(associated_text)
+        baseline_score = score_video_baseline_query_field(tag_name, associated_text)
+
+        if tag_name.casefold() == "textarea":
+            textarea_candidate_count += 1
+        if baseline_score >= 200:
+            video_baseline_match_count += 1
         if context_score:
             context_match_count += 1
-            score += context_score
+
+        score += context_score + baseline_score
         if score:
             candidates.append((score, index, item))
-        elif is_safe_text_fallback(attrs, str(tag_name)):
+        elif is_safe_text_fallback(attrs, tag_name):
             fallbacks.append((index, item))
+
     if candidates:
         candidates.sort(key=lambda value: (-value[0], value[1]))
         top_score = candidates[0][0]
         tied = [item for item in candidates if item[0] == top_score]
+        selection_mode = "video_baseline" if top_score >= 100 else "scored"
         meta = {
             "candidate_count": len(candidates),
             "top_score": top_score,
             "ambiguous": len(tied) != 1,
-            "selection_mode": "scored",
+            "selection_mode": selection_mode,
             "context_match_count": context_match_count,
+            "textarea_candidate_count": textarea_candidate_count,
+            "video_baseline_match_count": video_baseline_match_count,
             "fallback_candidate_count": len(fallbacks),
         }
         return (tied[0][2] if len(tied) == 1 else None), meta
+
     meta = {
         "candidate_count": 0,
         "top_score": 0,
         "ambiguous": len(fallbacks) > 1,
         "selection_mode": "unique_text_fallback" if len(fallbacks) == 1 else "none",
         "context_match_count": context_match_count,
+        "textarea_candidate_count": textarea_candidate_count,
+        "video_baseline_match_count": video_baseline_match_count,
         "fallback_candidate_count": len(fallbacks),
     }
     return (fallbacks[0][1] if len(fallbacks) == 1 else None), meta
