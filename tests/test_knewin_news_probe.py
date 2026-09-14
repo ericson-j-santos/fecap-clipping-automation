@@ -47,6 +47,15 @@ def main() -> int:
     assert "Rosely Schwartz" in terms
     assert "Graduação" in terms
     assert "Extensão" in terms
+
+    probe_knewin_news.configure("  Fecap  ")
+    assert probe_knewin_news.ACTIVE_SEARCH_TERM == "Fecap"
+    assert probe_knewin_news.configured_search_terms() == ["Fecap"]
+    assert probe_knewin_news.active_query() == "Fecap"
+    args = probe_knewin_news.parse_args(["--term", "Fecap"])
+    assert args.term == "Fecap" and args.check is False
+    probe_knewin_news.configure(None)
+
     print("knewin news probe tests: PASS")
     return 0
 

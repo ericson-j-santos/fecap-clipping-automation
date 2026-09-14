@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -15,7 +16,9 @@ PORTAL_URL = "https://news.knewin.com/#/login"
 AUTH_TIMEOUT_SECONDS = 600
 ORIGINAL_CHOOSE_SEARCH_FIELD = auto.choose_search_field
 ORIGINAL_ATTACH_RESPONSE_PROBE = base.attach_response_probe
+ORIGINAL_LOAD_KNOWN_QUERY = auto.load_known_query
 SAVED_SEARCH_NAMES: list[str] = []
+ACTIVE_SEARCH_TERM: str | None = None
 
 
 def extract_saved_search_names(payload) -> list[str]:
@@ -25,6 +28,8 @@ def extract_saved_search_names(payload) -> list[str]:
 
 
 def configured_search_terms() -> list[str]:
+    if ACTIVE_SEARCH_TERM and ACTIVE_SEARCH_TERM.strip():
+        return [ACTIVE_SEARCH_TERM.strip()]
     try:
         payload = json.loads((ROOT / "config" / "people.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
@@ -36,6 +41,12 @@ def configured_search_terms() -> list[str]:
         if isinstance(key, str) and key.strip(): terms.append(key)
         if isinstance(value, str) and value.strip(): terms.append(value)
     return list(dict.fromkeys(terms))
+
+
+def active_query() -> str:
+    if ACTIVE_SEARCH_TERM and ACTIVE_SEARCH_TERM.strip():
+        return ACTIVE_SEARCH_TERM.strip()
+    return ORIGINAL_LOAD_KNOWN_QUERY()
 
 
 def choose_saved_search_name(searches, terms: list[str] | None = None) -> tuple[str | None, dict]:
@@ -96,15 +107,27 @@ def choose_search_field(page):
     return (SavedSearchField(page, name, merged), merged) if name is not None else (None, merged)
 
 
-def configure() -> None:
+def configure(term: str | None = None) -> None:
+    global ACTIVE_SEARCH_TERM
+    ACTIVE_SEARCH_TERM = term.strip() if isinstance(term, str) and term.strip() else None
     SAVED_SEARCH_NAMES.clear(); base.PORTAL_URL=PORTAL_URL; auto.AUTH_TIMEOUT_SECONDS=AUTH_TIMEOUT_SECONDS
-    base.attach_response_probe=attach_response_probe; auto.choose_search_field=choose_search_field
+    base.attach_response_probe=attach_response_probe; auto.choose_search_field=choose_search_field; auto.load_known_query=active_query
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Sonda autenticada do Knewin News")
+    parser.add_argument("--check", action="store_true")
+    parser.add_argument("--term", type=str, default=None)
+    return parser.parse_args(argv)
 
 
 def main() -> int:
-    if "--check" in sys.argv:
-        print(f"portal={PORTAL_URL} timeout={AUTH_TIMEOUT_SECONDS}"); return 0
-    configure(); return auto.main()
+    ns = parse_args(sys.argv[1:])
+    if ns.check:
+        print(f"portal={PORTAL_URL} timeout={AUTH_TIMEOUT_SECONDS} term={ns.term or ''}")
+        return 0
+    configure(ns.term)
+    return auto.main()
 
 
 if __name__ == "__main__": raise SystemExit(main())
