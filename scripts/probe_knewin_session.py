@@ -27,8 +27,10 @@ OIDC_HINTS = ("login", "oauth", "oidc", "authorize", "identity", "auth", "sso")
 MAX_JSON_ENDPOINTS = 250
 MAX_NETWORK_OBSERVATIONS = 1000
 MAX_SCHEMA_OBSERVATIONS = 100
+MAX_SCHEMA_DIAGNOSTICS = 100
 DEFAULT_SCHEMA_BODY_BYTES = 1024 * 1024
 KNEWIN_NEWSSTREAM_SCHEMA_BODY_BYTES = 8 * 1024 * 1024
+SCHEMA_DIAGNOSTICS: list[dict] = []
 
 
 def schema_body_limit(endpoint: dict) -> int:
@@ -37,6 +39,56 @@ def schema_body_limit(endpoint: dict) -> int:
     if host == "news.knewin.com" and route.startswith("/newsstream/"):
         return KNEWIN_NEWSSTREAM_SCHEMA_BODY_BYTES
     return DEFAULT_SCHEMA_BODY_BYTES
+
+
+def schema_failure_diagnostic(endpoint: dict, body: bytes | None, limit: int, *, error_type: str | None = None) -> dict:
+    outcome = "body_error" if body is None else "unknown"
+    body_bytes = None if body is None else len(body)
+    if body is not None:
+        if len(body) > limit:
+            outcome = "too_large"
+        else:
+            try:
+                text = body.decode("utf-8")
+            except UnicodeDecodeError:
+                outcome = "invalid_utf8"
+            else:
+                try:
+                    json.loads(text)
+                except json.JSONDecodeError:
+                    outcome = "invalid_json"
+    return {
+        "host": str(endpoint.get("host") or "")[:180],
+        "route_template": str(endpoint.get("route_template") or "")[:240],
+        "path_sha256": str(endpoint.get("path_sha256") or "")[:64],
+        "method": str(endpoint.get("method") or "")[:16],
+        "status": endpoint.get("status") if isinstance(endpoint.get("status"), int) else None,
+        "outcome": outcome,
+        "body_bytes": body_bytes,
+        "limit_bytes": limit,
+        "error_type": (error_type or "")[:80],
+        "values_persisted": False,
+        "secrets_captured": False,
+    }
+
+
+def safe_schema_diagnostics() -> dict:
+    unique: dict[tuple, dict] = {}
+    for item in SCHEMA_DIAGNOSTICS:
+        key = (
+            item.get("host"), item.get("route_template"), item.get("path_sha256"),
+            item.get("method"), item.get("status"), item.get("outcome"),
+            item.get("body_bytes"), item.get("limit_bytes"), item.get("error_type"),
+        )
+        unique[key] = item
+    items = [unique[key] for key in sorted(unique, key=lambda x: tuple("" if p is None else str(p) for p in x))]
+    return {
+        "diagnostic_count": len(items),
+        "diagnostics": items[:MAX_SCHEMA_DIAGNOSTICS],
+        "truncated": len(items) > MAX_SCHEMA_DIAGNOSTICS,
+        "values_persisted": False,
+        "secrets_captured": False,
+    }
 
 
 def collect(page, context, schemes: set[str], oidc_hosts: set[str]):
@@ -79,16 +131,23 @@ def attach_response_probe(context, observations: list[dict], schema_observations
 
         if len(schema_observations) >= MAX_SCHEMA_OBSERVATIONS or is_login_like_url(response.url):
             return
+        limit = schema_body_limit(item)
         try:
-            schema = schema_observation_from_bytes(
-                item,
-                response.body(),
-                max_bytes=schema_body_limit(item),
-            )
-        except Exception:
+            body = response.body()
+        except Exception as exc:
+            if len(SCHEMA_DIAGNOSTICS) < MAX_SCHEMA_DIAGNOSTICS:
+                SCHEMA_DIAGNOSTICS.append(schema_failure_diagnostic(item, None, limit, error_type=type(exc).__name__))
+            return
+        try:
+            schema = schema_observation_from_bytes(item, body, max_bytes=limit)
+        except Exception as exc:
+            if len(SCHEMA_DIAGNOSTICS) < MAX_SCHEMA_DIAGNOSTICS:
+                SCHEMA_DIAGNOSTICS.append(schema_failure_diagnostic(item, None, limit, error_type=type(exc).__name__))
             return
         if schema is not None:
             schema_observations.append(schema)
+        elif len(SCHEMA_DIAGNOSTICS) < MAX_SCHEMA_DIAGNOSTICS:
+            SCHEMA_DIAGNOSTICS.append(schema_failure_diagnostic(item, body, limit))
 
     context.on("response", on_response)
 
@@ -119,6 +178,7 @@ def write_evidence(evidence: dict) -> None:
 
 
 def main() -> int:
+    SCHEMA_DIAGNOSTICS.clear()
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -154,6 +214,7 @@ def main() -> int:
                 "initial_location": url_fingerprint(authenticated_url),
                 "network_inventory": safe_inventory(first_network),
                 "response_schema_inventory": safe_schema_inventory(first_schemas),
+                "schema_probe_diagnostics": safe_schema_diagnostics(),
                 "session_reused": False,
                 "values_persisted": False,
                 "secrets_captured": False,
@@ -181,6 +242,7 @@ def main() -> int:
                 "exploration_completed": False,
                 "network_inventory": safe_inventory(first_network),
                 "response_schema_inventory": safe_schema_inventory(first_schemas),
+                "schema_probe_diagnostics": safe_schema_diagnostics(),
                 "session_reused": False,
                 "values_persisted": False,
                 "secrets_captured": False,
@@ -215,6 +277,7 @@ def main() -> int:
             "redirected_to_login": is_login_like_url(page2.url),
             "network_inventory": safe_inventory(first_network, second_network),
             "response_schema_inventory": safe_schema_inventory(first_schemas, second_schemas),
+            "schema_probe_diagnostics": safe_schema_diagnostics(),
             "session_reused": reuse_ok,
             "profile_persisted": True,
             "values_persisted": False,
