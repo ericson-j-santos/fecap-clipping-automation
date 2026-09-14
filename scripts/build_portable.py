@@ -25,12 +25,16 @@ SAFE_FILES = (
     "scripts/prepare_knewin_collector.py",
     "scripts/setup_local.py",
     "scripts/probe_knewin_session.py",
+    "scripts/probe_knewin_session_auto.py",
+    "scripts/probe_knewin_news.py",
     "scripts/e2e_live_knewin.py",
     "tests/e2e_public_news.py",
     "tests/test_json_schema_probe.py",
     "tests/test_knewin_api.py",
+    "tests/test_knewin_auto_probe.py",
     "tests/test_knewin_collector_plan.py",
     "tests/test_knewin_discovery.py",
+    "tests/test_knewin_news_probe.py",
     "tests/test_session_auth_probe.py",
 )
 

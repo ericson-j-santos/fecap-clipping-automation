@@ -13,6 +13,8 @@ REQUIRED_FILES = (
     "src/session_auth_probe.py",
     "config/people.json",
     "scripts/probe_knewin_session.py",
+    "scripts/probe_knewin_session_auto.py",
+    "scripts/probe_knewin_news.py",
     "scripts/e2e_live_knewin.py",
     "tests/e2e_public_news.py",
 )
