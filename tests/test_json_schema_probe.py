@@ -64,6 +64,23 @@ def test_schema_from_bytes_is_size_bounded_and_invalid_json_is_skipped() -> None
     assert schema_observation_from_bytes(endpoint(), b"not-json", max_bytes=100) is None
 
 
+def test_schema_from_bytes_accepts_bom_and_known_xssi_prefixes_without_values() -> None:
+    samples = [
+        b'\xef\xbb\xbf{"secret":"SENTINEL_BOM","items":[{"id":1}]}',
+        b')]}\'\n{"secret":"SENTINEL_XSSI","items":[{"id":1}]}',
+        b'while(1);{"secret":"SENTINEL_WHILE","items":[{"id":1}]}',
+        b'for(;;);{"secret":"SENTINEL_FOR","items":[{"id":1}]}',
+    ]
+    for body in samples:
+        observation = schema_observation_from_bytes(endpoint(), body, max_bytes=1000)
+        assert observation is not None
+        serialized = json.dumps(observation, sort_keys=True)
+        assert "SENTINEL" not in serialized
+        assert observation["response_schema"]["type"] == "object"
+        assert observation["values_persisted"] is False
+        assert observation["secrets_captured"] is False
+
+
 def test_newsstream_has_larger_but_scoped_schema_limit() -> None:
     newsstream = {"host": "news.knewin.com", "route_template": "/newsstream/appService"}
     admin = {"host": "news.knewin.com", "route_template": "/newsstream/adminService"}
@@ -120,6 +137,7 @@ if __name__ == "__main__":
     test_shape_never_persists_scalar_values()
     test_unsafe_dynamic_field_name_is_hashed()
     test_schema_from_bytes_is_size_bounded_and_invalid_json_is_skipped()
+    test_schema_from_bytes_accepts_bom_and_known_xssi_prefixes_without_values()
     test_newsstream_has_larger_but_scoped_schema_limit()
     test_schema_failure_diagnostic_never_persists_values()
     test_inventory_is_deterministic_and_deduplicated()
