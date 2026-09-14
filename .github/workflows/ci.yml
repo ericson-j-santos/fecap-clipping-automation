@@ -34,10 +34,12 @@ jobs:
         run: python tests/test_knewin_auto_probe.py
       - name: Validar portal Knewin News e rota SPA de login
         run: python tests/test_knewin_news_probe.py
+      - name: Validar gatilho da sonda guiada
+        run: python tests/test_knewin_guided_probe.py
       - name: Validar execução direta da sonda Knewin News
         run: python scripts/probe_knewin_news.py --check
       - name: Validar sintaxe dos scripts interativos
-        run: python -m py_compile scripts/probe_knewin_session.py scripts/probe_knewin_session_auto.py scripts/probe_knewin_news.py scripts/analyze_knewin_inventory.py scripts/prepare_knewin_collector.py
+        run: python -m py_compile scripts/probe_knewin_session.py scripts/probe_knewin_session_auto.py scripts/probe_knewin_news.py scripts/probe_knewin_news_guided.py scripts/analyze_knewin_inventory.py scripts/prepare_knewin_collector.py
       - name: Gerar pacote portátil
         run: python scripts/build_portable.py
       - name: Publicar pacote portátil
