@@ -59,7 +59,7 @@ def test_schema_from_bytes_is_size_bounded_and_invalid_json_is_skipped() -> None
 
 
 def test_framed_json_parses_envelope_without_persisting_prefix_or_values() -> None:
-    body = b")]}',\n{"title":"SENTINEL_VALUE","items":[{"id":123}]}\n"
+    body = b''')]}',\n{"title":"SENTINEL_VALUE","items":[{"id":123}]}\n'''
     observation, framing = schema_observation_from_framed_bytes(endpoint(), body, max_bytes=1000)
     assert observation is not None and framing is not None
     assert framing["mode"] == "trimmed_envelope"
@@ -77,13 +77,13 @@ def test_framed_json_handles_bom_and_sequence_structurally() -> None:
     assert observation is not None and framing["mode"] == "bom_stripped"
     assert "SENTINEL_BOM" not in json.dumps(observation, sort_keys=True)
 
-    sequence = b'{"a":"SENTINEL_A"}\n{"b":123}'
+    sequence = b'{"a":"SENTINEL_SEQUENCE_A"}\n{"b":"SENTINEL_SEQUENCE_B"}'
     observation, framing = schema_observation_from_framed_bytes(endpoint(), sequence, max_bytes=1000)
     assert observation is not None and framing["mode"] == "json_sequence"
     assert framing["item_count"] == 2
     serialized = json.dumps({"observation": observation, "framing": framing}, sort_keys=True)
-    assert "SENTINEL_A" not in serialized
-    assert "123" not in serialized
+    assert "SENTINEL_SEQUENCE_A" not in serialized
+    assert "SENTINEL_SEQUENCE_B" not in serialized
 
 
 def test_framed_json_still_fails_closed_for_unparseable_body() -> None:
