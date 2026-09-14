@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -12,21 +13,26 @@ import scripts.probe_knewin_session_auto as auto
 PORTAL_URL = "https://news.knewin.com/#/login"
 AUTH_TIMEOUT_SECONDS = 600
 ORIGINAL_CHOOSE_SEARCH_FIELD = auto.choose_search_field
+ORIGINAL_ATTACH_RESPONSE_PROBE = base.attach_response_probe
+SAVED_SEARCH_NAMES: list[str] = []
+
+
+def extract_saved_search_names(payload) -> list[str]:
+    names: list[str] = []
+    if not isinstance(payload, list):
+        return names
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        if isinstance(name, str) and name.strip():
+            names.append(name)
+    return names
 
 
 def choose_saved_search_name(searches) -> tuple[str | None, dict]:
-    valid_names: list[str] = []
-    matches: list[str] = []
-    if isinstance(searches, list):
-        for item in searches:
-            if not isinstance(item, dict):
-                continue
-            name = item.get("name")
-            if not isinstance(name, str) or not name.strip():
-                continue
-            valid_names.append(name)
-            if "fecap" in auto.normalize_label(name):
-                matches.append(name)
+    valid_names = extract_saved_search_names(searches)
+    matches = [name for name in valid_names if "fecap" in auto.normalize_label(name)]
     meta = {
         "mode": "saved_search",
         "saved_search_count": len(valid_names),
@@ -34,6 +40,28 @@ def choose_saved_search_name(searches) -> tuple[str | None, dict]:
         "selected": len(matches) == 1,
     }
     return (matches[0] if len(matches) == 1 else None), meta
+
+
+def attach_response_probe(context, observations: list[dict], schema_observations: list[dict]) -> None:
+    ORIGINAL_ATTACH_RESPONSE_PROBE(context, observations, schema_observations)
+
+    def on_response(response) -> None:
+        try:
+            parsed = urlparse(response.url)
+            if (parsed.hostname or "").casefold() != "news.knewin.com":
+                return
+            if (parsed.path.rstrip("/") or "/") != "/restful/searches":
+                return
+            if response.status != 200 or response.request.method.upper() != "GET":
+                return
+            names = extract_saved_search_names(response.json())
+            if names:
+                SAVED_SEARCH_NAMES.clear()
+                SAVED_SEARCH_NAMES.extend(names)
+        except Exception:
+            return
+
+    context.on("response", on_response)
 
 
 class SavedSearchField:
@@ -69,18 +97,7 @@ def choose_search_field(page):
         meta = dict(meta)
         meta["mode"] = "input"
         return field, meta
-    try:
-        searches = page.evaluate(
-            """async () => {
-                const response = await fetch('/restful/searches', {credentials: 'same-origin'});
-                if (!response.ok) return [];
-                const data = await response.json();
-                if (!Array.isArray(data)) return [];
-                return data.map(item => ({name: typeof item?.name === 'string' ? item.name : ''}));
-            }"""
-        )
-    except Exception:
-        searches = []
+    searches = [{"name": name} for name in SAVED_SEARCH_NAMES]
     name, saved_meta = choose_saved_search_name(searches)
     merged = dict(meta)
     merged.update(saved_meta)
@@ -90,8 +107,10 @@ def choose_search_field(page):
 
 
 def configure() -> None:
+    SAVED_SEARCH_NAMES.clear()
     base.PORTAL_URL = PORTAL_URL
     auto.AUTH_TIMEOUT_SECONDS = AUTH_TIMEOUT_SECONDS
+    base.attach_response_probe = attach_response_probe
     auto.choose_search_field = choose_search_field
 
 

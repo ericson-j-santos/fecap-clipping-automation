@@ -14,6 +14,14 @@ def main() -> int:
     assert is_login_like_url("https://news.knewin.com/#/login") is True
     assert is_login_like_url("https://news.knewin.com/#/home") is False
 
+    names = probe_knewin_news.extract_saved_search_names([
+        {"name": "FECAP - Clipping", "id": 123},
+        {"name": "Concorrentes", "id": 456},
+        {"name": ""},
+        {"other": "x"},
+    ])
+    assert names == ["FECAP - Clipping", "Concorrentes"]
+
     selected, meta = probe_knewin_news.choose_saved_search_name([
         {"name": "FECAP - Clipping"},
         {"name": "Concorrentes"},
@@ -39,6 +47,7 @@ def main() -> int:
     assert meta["fecap_match_count"] == 0
     assert meta["selected"] is False
 
+    assert probe_knewin_news.extract_saved_search_names({"name": "FECAP"}) == []
     print("knewin news probe tests: PASS")
     return 0
 
