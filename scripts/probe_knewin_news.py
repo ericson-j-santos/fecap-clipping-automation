@@ -15,6 +15,7 @@ from src.session_auth_probe import is_login_like_url, url_fingerprint
 
 PORTAL_URL = "https://news.knewin.com/#/login"
 AUTH_TIMEOUT_SECONDS = 600
+ADVANCED_TAB_LABELS = {"avançada", "avancada"}
 ORIGINAL_CHOOSE_SEARCH_FIELD = auto.choose_search_field
 ORIGINAL_ATTACH_RESPONSE_PROBE = base.attach_response_probe
 ORIGINAL_LOAD_KNOWN_QUERY = auto.load_known_query
@@ -143,14 +144,68 @@ class SavedSearchField:
             visible[0].click()
 
 
+def is_advanced_tab_label(value: str | None) -> bool:
+    return auto.normalize_label(value) in ADVANCED_TAB_LABELS
+
+
+def _control_text(item) -> str:
+    try:
+        text = item.inner_text(timeout=500)
+    except Exception:
+        text = ""
+    if not text:
+        try:
+            text = item.get_attribute("aria-label") or item.get_attribute("title") or ""
+        except Exception:
+            text = ""
+    return str(text or "")
+
+
+def choose_advanced_search_tab(page):
+    locator = page.locator("a,button,[role='tab'],[role='button']")
+    hits = []
+    for index in range(min(locator.count(), 250)):
+        item = locator.nth(index)
+        try:
+            if not item.is_visible() or not item.is_enabled():
+                continue
+        except Exception:
+            continue
+        if is_advanced_tab_label(_control_text(item)):
+            hits.append(item)
+    meta = {
+        "candidate_count": len(hits),
+        "ambiguous": len(hits) > 1,
+        "selected": len(hits) == 1,
+        "clicked": False,
+    }
+    return (hits[0] if len(hits) == 1 else None), meta
+
+
+def activate_advanced_search(page) -> dict:
+    tab, meta = choose_advanced_search_tab(page)
+    if tab is None:
+        return meta
+    try:
+        tab.click()
+        page.wait_for_timeout(1800)
+        meta["clicked"] = True
+    except Exception:
+        meta["clicked"] = False
+    return meta
+
+
 def choose_search_field(page):
+    advanced_meta = activate_advanced_search(page)
     field, meta = ORIGINAL_CHOOSE_SEARCH_FIELD(page)
     if field is not None:
         meta = dict(meta)
         meta["mode"] = "input"
+        meta["advanced_tab"] = advanced_meta
         return field, meta
     name, saved_meta = choose_saved_search_name([{"name": n} for n in SAVED_SEARCH_NAMES])
     merged = dict(meta)
+    merged["advanced_tab"] = advanced_meta
     merged.update(saved_meta)
     return (SavedSearchField(page, name, merged), merged) if name is not None else (None, merged)
 
@@ -169,7 +224,7 @@ def configure(term: str | None = None) -> None:
 def query_dom_diagnostic(page) -> dict:
     """Retorna somente estrutura técnica ao redor de 'Buscar por'; nunca valores/texto livre."""
     return page.evaluate(
-        """() => {
+        r"""() => {
             const norm = value => String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
             const visible = el => {
                 const r = el.getBoundingClientRect();
@@ -285,6 +340,7 @@ def run_query_dom_diagnostic() -> int:
             nav.click()
             page.wait_for_timeout(3000)
 
+        advanced_meta = activate_advanced_search(page)
         diagnostic = query_dom_diagnostic(page)
         anchor_count = int(diagnostic.get("anchor_count", 0) or 0)
         payload = {
@@ -293,6 +349,7 @@ def run_query_dom_diagnostic() -> int:
             "auth_mode": auth.auth_mode,
             "location": url_fingerprint(page.url),
             "navigation": nav_meta,
+            "advanced_tab": advanced_meta,
             "diagnostic": diagnostic,
             "values_persisted": False,
             "secrets_captured": False,

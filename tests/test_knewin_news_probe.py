@@ -15,6 +15,10 @@ def main() -> int:
     assert is_login_like_url("https://news.knewin.com/#/login") is True
     assert is_login_like_url("https://news.knewin.com/#/home") is False
 
+    assert probe_knewin_news.is_advanced_tab_label("AVANÇADA") is True
+    assert probe_knewin_news.is_advanced_tab_label("Avancada") is True
+    assert probe_knewin_news.is_advanced_tab_label("SIMPLES") is False
+
     names = probe_knewin_news.extract_saved_search_names([
         {"name":"FECAP - Clipping"},{"name":"Concorrentes"},{"name":""},{"other":"x"}
     ])
