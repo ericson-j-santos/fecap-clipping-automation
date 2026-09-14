@@ -32,6 +32,8 @@ jobs:
         run: python tests/test_knewin_collector_plan.py
       - name: Validar contrato runtime sanitizado do Knewin
         run: python tests/test_knewin_runtime_validation.py
+      - name: Validar coletor autenticado one-shot
+        run: python tests/test_knewin_session_collector.py
       - name: Validar seleção fail-closed da sonda automática
         run: python tests/test_knewin_auto_probe.py
       - name: Validar portal Knewin News e rota SPA de login
@@ -42,8 +44,10 @@ jobs:
         run: python scripts/probe_knewin_news.py --check
       - name: Validar entrada da validação runtime
         run: python scripts/validate_knewin_publications_runtime.py --check
+      - name: Validar entrada do coletor autenticado
+        run: python scripts/collect_knewin_publications.py --check
       - name: Validar sintaxe dos scripts interativos
-        run: python -m py_compile scripts/probe_knewin_session.py scripts/probe_knewin_session_auto.py scripts/probe_knewin_news.py scripts/probe_knewin_news_guided.py scripts/analyze_knewin_inventory.py scripts/prepare_knewin_collector.py scripts/validate_knewin_publications_runtime.py
+        run: python -m py_compile scripts/probe_knewin_session.py scripts/probe_knewin_session_auto.py scripts/probe_knewin_news.py scripts/probe_knewin_news_guided.py scripts/analyze_knewin_inventory.py scripts/prepare_knewin_collector.py scripts/validate_knewin_publications_runtime.py scripts/collect_knewin_publications.py
       - name: Gerar pacote portátil
         run: python scripts/build_portable.py
       - name: Publicar pacote portátil
