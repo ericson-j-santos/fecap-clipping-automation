@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 data/*.sqlite3
+data/private/
 .env
 .env.*
 auth-state*.json
