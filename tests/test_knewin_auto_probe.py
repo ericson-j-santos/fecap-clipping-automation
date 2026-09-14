@@ -9,6 +9,7 @@ sys.path.insert(0, str(ROOT))
 from scripts.probe_knewin_session_auto import (
     is_safe_text_fallback,
     normalize_label,
+    score_field_context,
     score_navigation_label,
     score_search_attrs,
 )
@@ -25,6 +26,11 @@ def main() -> int:
     assert score_search_attrs({"type": "text", "aria-label": "Pesquisar"}) == 40
     assert score_search_attrs({"type": "password", "placeholder": "Buscar"}) == 0
     assert score_search_attrs({"type": "email", "aria-label": "Pesquisar"}) == 0
+
+    assert score_field_context("Palavra-chave") == 50
+    assert score_field_context("Termo da consulta") == 50
+    assert score_field_context("Query") == 50
+    assert score_field_context("Data inicial") == 0
 
     assert is_safe_text_fallback({"type": "text"}, "input") is True
     assert is_safe_text_fallback({"type": ""}, "input") is True
