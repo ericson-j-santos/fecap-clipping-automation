@@ -29,7 +29,7 @@ FIELD_CONTEXT_TERMS = SEARCH_TERMS + (
 VIDEO_BASELINE_QUERY_LABELS = ("buscar por",)
 SUBMIT_TERMS = ("buscar", "pesquisar", "consultar", "aplicar")
 SENSITIVE_FIELD_TYPES = {"password", "email", "hidden", "checkbox", "radio", "file"}
-TEXT_FALLBACK_TYPES = {"", "text"}
+TEXT_FALLBACK_TYPES = {"", "text", "search"}
 
 
 def normalize_label(value: str | None) -> str:
@@ -69,17 +69,52 @@ def score_field_context(value: str | None) -> int:
     return 50 if any(term in text for term in FIELD_CONTEXT_TERMS) else 0
 
 
-def score_video_baseline_query_field(tag_name: str, associated_text: str | None) -> int:
-    """Prioriza o padrão observado no vídeo: textarea grande rotulado 'Buscar por *'."""
-    if tag_name.casefold() != "textarea":
+def is_text_capable_control(attrs: dict[str, str | None], tag_name: str) -> bool:
+    field_type = normalize_label(attrs.get("type"))
+    if field_type in SENSITIVE_FIELD_TYPES:
+        return False
+    role = normalize_label(attrs.get("role"))
+    contenteditable = normalize_label(attrs.get("contenteditable"))
+    tag = tag_name.casefold()
+    if tag == "textarea":
+        return True
+    if tag == "input" and field_type in TEXT_FALLBACK_TYPES:
+        return True
+    if role in {"textbox", "searchbox"}:
+        return True
+    return contenteditable in {"true", "plaintext-only"}
+
+
+def score_video_baseline_query_field(
+    tag_name: str,
+    attrs: dict[str, str | None],
+    associated_text: str | None,
+    *,
+    width: float = 0,
+    height: float = 0,
+) -> int:
+    """Pontua o controle funcional observado no vídeo, sem depender da tag HTML."""
+    if not is_text_capable_control(attrs, tag_name):
         return 0
+
     label = normalize_label(associated_text).replace("*", "").strip()
+    role = normalize_label(attrs.get("role"))
+    contenteditable = normalize_label(attrs.get("contenteditable"))
+    score = 0
+
+    # Sinal mais forte do baseline: rótulo visual "Buscar por *".
     if any(term in label for term in VIDEO_BASELINE_QUERY_LABELS):
-        return 200
-    # O vídeo mostra um único textarea de consulta. Se o HTML não expuser o
-    # rótulo semanticamente, ainda damos preferência estrutural ao textarea.
-    # Havendo mais de um textarea com o mesmo escore, o fluxo continua fail-closed.
-    return 100
+        score += 220
+
+    # Sinais estruturais do controle grande/multilinha mostrado no vídeo.
+    if tag_name.casefold() == "textarea":
+        score += 90
+    if role in {"textbox", "searchbox"} or contenteditable in {"true", "plaintext-only"}:
+        score += 70
+    if width >= 120 and height >= 60:
+        score += 120
+
+    return score
 
 
 def associated_field_text(item) -> str:
@@ -89,6 +124,11 @@ def associated_field_text(item) -> str:
             if (el.labels) for (const label of Array.from(el.labels)) parts.push(label.innerText || label.textContent || '');
             const parent = el.closest('label');
             if (parent) parts.push(parent.innerText || parent.textContent || '');
+            const id = el.getAttribute('id');
+            if (id) {
+                const explicit = document.querySelector(`label[for="${CSS.escape(id)}"]`);
+                if (explicit) parts.push(explicit.innerText || explicit.textContent || '');
+            }
             return parts.join(' ');
         }""") or "")
     except Exception:
@@ -96,12 +136,7 @@ def associated_field_text(item) -> str:
 
 
 def is_safe_text_fallback(attrs: dict[str, str | None], tag_name: str) -> bool:
-    field_type = normalize_label(attrs.get("type"))
-    if field_type in SENSITIVE_FIELD_TYPES:
-        return False
-    if tag_name.casefold() == "textarea":
-        return True
-    return field_type in TEXT_FALLBACK_TYPES
+    return is_text_capable_control(attrs, tag_name)
 
 
 def load_known_query() -> str:
@@ -161,13 +196,17 @@ def choose_navigation(page):
 
 
 def choose_search_field(page):
-    locator = page.locator("input,textarea,[role='searchbox']")
+    locator = page.locator(
+        "input,textarea,[role='searchbox'],[role='textbox'],[contenteditable='true'],[contenteditable='plaintext-only']"
+    )
     candidates = []
     fallbacks = []
     context_match_count = 0
     textarea_candidate_count = 0
+    large_control_candidate_count = 0
     video_baseline_match_count = 0
-    for index in range(min(locator.count(), 200)):
+
+    for index in range(min(locator.count(), 250)):
         item = locator.nth(index)
         try:
             if not item.is_visible() or not item.is_enabled():
@@ -179,53 +218,72 @@ def choose_search_field(page):
                 "aria-label": item.get_attribute("aria-label"),
                 "name": item.get_attribute("name"),
                 "title": item.get_attribute("title"),
+                "contenteditable": item.get_attribute("contenteditable"),
             }
             tag_name = str(item.evaluate("el => el.tagName.toLowerCase()"))
+            box = item.bounding_box() or {}
+            width = float(box.get("width", 0) or 0)
+            height = float(box.get("height", 0) or 0)
         except Exception:
+            continue
+
+        if not is_text_capable_control(attrs, tag_name):
             continue
 
         associated_text = associated_field_text(item)
         score = score_search_attrs(attrs)
         context_score = score_field_context(associated_text)
-        baseline_score = score_video_baseline_query_field(tag_name, associated_text)
+        baseline_score = score_video_baseline_query_field(
+            tag_name,
+            attrs,
+            associated_text,
+            width=width,
+            height=height,
+        )
 
         if tag_name.casefold() == "textarea":
             textarea_candidate_count += 1
-        if baseline_score >= 200:
+        if width >= 120 and height >= 60:
+            large_control_candidate_count += 1
+        if baseline_score >= 120:
             video_baseline_match_count += 1
         if context_score:
             context_match_count += 1
 
         score += context_score + baseline_score
         if score:
-            candidates.append((score, index, item))
-        elif is_safe_text_fallback(attrs, tag_name):
+            candidates.append((score, baseline_score, index, item))
+        else:
             fallbacks.append((index, item))
 
     if candidates:
-        candidates.sort(key=lambda value: (-value[0], value[1]))
+        candidates.sort(key=lambda value: (-value[0], -value[1], value[2]))
         top_score = candidates[0][0]
-        tied = [item for item in candidates if item[0] == top_score]
-        selection_mode = "video_baseline" if top_score >= 100 else "scored"
+        top_baseline_score = candidates[0][1]
+        tied = [item for item in candidates if item[0] == top_score and item[1] == top_baseline_score]
         meta = {
             "candidate_count": len(candidates),
             "top_score": top_score,
+            "top_baseline_score": top_baseline_score,
             "ambiguous": len(tied) != 1,
-            "selection_mode": selection_mode,
+            "selection_mode": "video_baseline" if top_baseline_score else "scored",
             "context_match_count": context_match_count,
             "textarea_candidate_count": textarea_candidate_count,
+            "large_control_candidate_count": large_control_candidate_count,
             "video_baseline_match_count": video_baseline_match_count,
             "fallback_candidate_count": len(fallbacks),
         }
-        return (tied[0][2] if len(tied) == 1 else None), meta
+        return (tied[0][3] if len(tied) == 1 else None), meta
 
     meta = {
         "candidate_count": 0,
         "top_score": 0,
+        "top_baseline_score": 0,
         "ambiguous": len(fallbacks) > 1,
         "selection_mode": "unique_text_fallback" if len(fallbacks) == 1 else "none",
         "context_match_count": context_match_count,
         "textarea_candidate_count": textarea_candidate_count,
+        "large_control_candidate_count": large_control_candidate_count,
         "video_baseline_match_count": video_baseline_match_count,
         "fallback_candidate_count": len(fallbacks),
     }
