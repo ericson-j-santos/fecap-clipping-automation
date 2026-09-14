@@ -13,6 +13,10 @@ from src.session_auth_probe import is_login_like_url, session_reuse_is_valid, ur
 
 AUTH_TIMEOUT_SECONDS = 180
 NAVIGATION_TERMS = (
+    ("busca", 130),
+    ("buscar", 130),
+    ("pesquisa", 125),
+    ("pesquisar", 125),
     ("clipping", 100),
     ("notícias", 90),
     ("noticias", 90),

@@ -11,7 +11,8 @@ from scripts.probe_knewin_session_auto import normalize_label, score_navigation_
 
 def main() -> int:
     assert normalize_label("  Clipping   Geral ") == "clipping geral"
-    assert score_navigation_label("Clipping") > score_navigation_label("Monitoramento") > 0
+    assert score_navigation_label("Busca") > score_navigation_label("Clipping") > score_navigation_label("Monitoramento") > 0
+    assert score_navigation_label("Pesquisar") > score_navigation_label("Clipping")
     assert score_navigation_label("Configurações") == 0
 
     assert score_search_attrs({"type": "search"}) == 60
