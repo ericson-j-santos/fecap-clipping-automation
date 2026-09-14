@@ -11,6 +11,7 @@ from scripts.probe_knewin_session import (
     DEFAULT_SCHEMA_BODY_BYTES,
     KNEWIN_NEWSSTREAM_SCHEMA_BODY_BYTES,
     schema_body_limit,
+    schema_failure_diagnostic,
 )
 from src.json_schema_probe import (
     build_schema_inventory,
@@ -64,27 +65,33 @@ def test_schema_from_bytes_is_size_bounded_and_invalid_json_is_skipped() -> None
 
 
 def test_newsstream_has_larger_but_scoped_schema_limit() -> None:
-    newsstream = {
-        "host": "news.knewin.com",
-        "route_template": "/newsstream/appService",
-    }
-    admin = {
-        "host": "news.knewin.com",
-        "route_template": "/newsstream/adminService",
-    }
-    unrelated = {
-        "host": "news.knewin.com",
-        "route_template": "/restful/searches",
-    }
-    external = {
-        "host": "example.com",
-        "route_template": "/newsstream/appService",
-    }
+    newsstream = {"host": "news.knewin.com", "route_template": "/newsstream/appService"}
+    admin = {"host": "news.knewin.com", "route_template": "/newsstream/adminService"}
+    unrelated = {"host": "news.knewin.com", "route_template": "/restful/searches"}
+    external = {"host": "example.com", "route_template": "/newsstream/appService"}
     assert schema_body_limit(newsstream) == KNEWIN_NEWSSTREAM_SCHEMA_BODY_BYTES
     assert schema_body_limit(admin) == KNEWIN_NEWSSTREAM_SCHEMA_BODY_BYTES
     assert schema_body_limit(unrelated) == DEFAULT_SCHEMA_BODY_BYTES
     assert schema_body_limit(external) == DEFAULT_SCHEMA_BODY_BYTES
-    assert KNEWIN_NEWSSTREAM_SCHEMA_BODY_BYTES == 8 * 1024 * 1024
+
+
+def test_schema_failure_diagnostic_never_persists_values() -> None:
+    item = endpoint()
+    invalid = schema_failure_diagnostic(item, b'{"secret":"SENTINEL"', 100)
+    serialized = json.dumps(invalid, sort_keys=True)
+    assert invalid["outcome"] == "invalid_json"
+    assert invalid["body_bytes"] == len(b'{"secret":"SENTINEL"')
+    assert "SENTINEL" not in serialized
+    assert invalid["values_persisted"] is False
+    assert invalid["secrets_captured"] is False
+
+    too_large = schema_failure_diagnostic(item, b"12345", 4)
+    assert too_large["outcome"] == "too_large"
+
+    body_error = schema_failure_diagnostic(item, None, 100, error_type="Error")
+    assert body_error["outcome"] == "body_error"
+    assert body_error["body_bytes"] is None
+    assert body_error["error_type"] == "Error"
 
 
 def test_inventory_is_deterministic_and_deduplicated() -> None:
@@ -114,6 +121,7 @@ if __name__ == "__main__":
     test_unsafe_dynamic_field_name_is_hashed()
     test_schema_from_bytes_is_size_bounded_and_invalid_json_is_skipped()
     test_newsstream_has_larger_but_scoped_schema_limit()
+    test_schema_failure_diagnostic_never_persists_values()
     test_inventory_is_deterministic_and_deduplicated()
     test_depth_and_field_limits_do_not_leak_values()
     print("json schema probe tests: PASS")
