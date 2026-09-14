@@ -1,4 +1,5 @@
 from pathlib import Path
+import inspect
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,8 +53,23 @@ def main() -> int:
     assert probe_knewin_news.ACTIVE_SEARCH_TERM == "Fecap"
     assert probe_knewin_news.configured_search_terms() == ["Fecap"]
     assert probe_knewin_news.active_query() == "Fecap"
+
     args = probe_knewin_news.parse_args(["--term", "Fecap"])
     assert args.term == "Fecap" and args.check is False
+    assert args.diagnose_query_dom is False
+
+    diagnostic_args = probe_knewin_news.parse_args(["--diagnose-query-dom"])
+    assert diagnostic_args.diagnose_query_dom is True
+
+    source = inspect.getsource(probe_knewin_news.query_dom_diagnostic)
+    assert "anchor_count" in source
+    assert "input_descendants" in source
+    assert "iframe_descendants" in source
+    assert "custom_descendant_tags" in source
+    assert "el.value" not in source
+    assert "localStorage" not in source and "sessionStorage" not in source
+    assert "document.cookie" not in source
+
     probe_knewin_news.configure(None)
 
     print("knewin news probe tests: PASS")
