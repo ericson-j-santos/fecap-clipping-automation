@@ -86,7 +86,6 @@ def main() -> int:
     assert publications[0].external_id == "news-1"
     assert publications[0].candidate.title == "FECAP em destaque"
     assert publications[0].candidate.source == "Veículo A"
-    assert publications[0].terms == ("fecap", "educação")
 
     output = functional_output("Fecap", runtime, publications)
     assert output["mode"] == "one_shot"
@@ -94,7 +93,11 @@ def main() -> int:
     assert output["production_enabled"] is False
     assert output["credentials_persisted"] is False
     assert output["raw_response_persisted"] is False
+    assert set(output["items"][0]) == {"external_id", "title", "url", "source", "published_at", "text"}
     assert output["items"][0]["title"] == "FECAP em destaque"
+    serialized_output = json.dumps(output, ensure_ascii=False)
+    assert "Autor A" not in serialized_output
+    assert "educação" not in serialized_output
 
     evidence = build_run_evidence(runtime, publications, 200, actual_shape, "b" * 64)
     serialized = json.dumps(evidence, ensure_ascii=False)
