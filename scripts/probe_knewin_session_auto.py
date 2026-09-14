@@ -24,6 +24,8 @@ NAVIGATION_TERMS = (
 )
 SEARCH_TERMS = ("buscar", "busca", "pesquisar", "pesquisa", "termo", "palavra", "search")
 SUBMIT_TERMS = ("buscar", "pesquisar", "consultar", "aplicar")
+SENSITIVE_FIELD_TYPES = {"password", "email", "hidden", "checkbox", "radio", "file"}
+TEXT_FALLBACK_TYPES = {"", "text"}
 
 
 def normalize_label(value: str | None) -> str:
@@ -43,7 +45,7 @@ def score_navigation_label(label: str | None) -> int:
 
 def score_search_attrs(attrs: dict[str, str | None]) -> int:
     field_type = normalize_label(attrs.get("type"))
-    if field_type in {"password", "email", "hidden", "checkbox", "radio", "file"}:
+    if field_type in SENSITIVE_FIELD_TYPES:
         return 0
     score = 0
     if field_type == "search":
@@ -56,6 +58,15 @@ def score_search_attrs(attrs: dict[str, str | None]) -> int:
         if any(term in value for term in SEARCH_TERMS):
             score += 40
     return score
+
+
+def is_safe_text_fallback(attrs: dict[str, str | None], tag_name: str) -> bool:
+    field_type = normalize_label(attrs.get("type"))
+    if field_type in SENSITIVE_FIELD_TYPES:
+        return False
+    if tag_name.casefold() == "textarea":
+        return True
+    return field_type in TEXT_FALLBACK_TYPES
 
 
 def load_known_query() -> str:
@@ -117,6 +128,7 @@ def choose_navigation(page):
 def choose_search_field(page):
     locator = page.locator("input,textarea,[role='searchbox']")
     candidates = []
+    fallbacks = []
     for index in range(min(locator.count(), 200)):
         item = locator.nth(index)
         try:
@@ -130,18 +142,34 @@ def choose_search_field(page):
                 "name": item.get_attribute("name"),
                 "title": item.get_attribute("title"),
             }
+            tag_name = item.evaluate("el => el.tagName.toLowerCase()")
         except Exception:
             continue
         score = score_search_attrs(attrs)
         if score:
             candidates.append((score, index, item))
-    if not candidates:
-        return None, {"candidate_count": 0, "top_score": 0, "ambiguous": False}
-    candidates.sort(key=lambda value: (-value[0], value[1]))
-    top_score = candidates[0][0]
-    tied = [item for item in candidates if item[0] == top_score]
-    meta = {"candidate_count": len(candidates), "top_score": top_score, "ambiguous": len(tied) != 1}
-    return (tied[0][2] if len(tied) == 1 else None), meta
+        elif is_safe_text_fallback(attrs, str(tag_name)):
+            fallbacks.append((index, item))
+    if candidates:
+        candidates.sort(key=lambda value: (-value[0], value[1]))
+        top_score = candidates[0][0]
+        tied = [item for item in candidates if item[0] == top_score]
+        meta = {
+            "candidate_count": len(candidates),
+            "top_score": top_score,
+            "ambiguous": len(tied) != 1,
+            "selection_mode": "scored",
+            "fallback_candidate_count": len(fallbacks),
+        }
+        return (tied[0][2] if len(tied) == 1 else None), meta
+    meta = {
+        "candidate_count": 0,
+        "top_score": 0,
+        "ambiguous": len(fallbacks) > 1,
+        "selection_mode": "unique_text_fallback" if len(fallbacks) == 1 else "none",
+        "fallback_candidate_count": len(fallbacks),
+    }
+    return (fallbacks[0][1] if len(fallbacks) == 1 else None), meta
 
 
 def choose_submit(page):
