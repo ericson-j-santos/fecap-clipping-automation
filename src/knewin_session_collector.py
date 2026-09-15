@@ -57,6 +57,20 @@ def session_reuse_ui_is_valid(auth_mode: str, navigation_meta: object) -> bool:
     )
 
 
+def saved_login_submission_is_allowed(
+    *,
+    explicit_request: bool,
+    username_prefilled: bool,
+    password_prefilled: bool,
+) -> bool:
+    """Autoriza Enter somente quando o pedido é explícito e ambos os campos estão preenchidos."""
+    return (
+        explicit_request is True
+        and username_prefilled is True
+        and password_prefilled is True
+    )
+
+
 def validate_runtime_gate(runtime: dict) -> dict:
     if not isinstance(runtime, dict) or runtime.get("status") != "RUNTIME_VALIDATED":
         raise SessionCollectorError("runtime ainda não está validado")
