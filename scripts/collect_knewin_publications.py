@@ -19,6 +19,7 @@ from src.knewin_session_collector import (
     SessionCollectorError,
     build_run_evidence,
     functional_output,
+    saved_login_submission_is_allowed,
     session_reuse_ui_is_valid,
     validate_live_response,
     validate_runtime_gate,
@@ -81,6 +82,51 @@ def effective_auth_timeout_seconds(allow_human_login: bool, requested: int) -> i
     return requested
 
 
+def _visible_enabled(locator, *, max_items: int = 20):
+    matches = []
+    for index in range(min(locator.count(), max_items)):
+        item = locator.nth(index)
+        try:
+            if item.is_visible() and item.is_enabled():
+                matches.append(item)
+        except Exception:
+            continue
+    return matches
+
+
+def _saved_login_prefill_state(page):
+    """Retorna somente booleanos/contagens; nunca traz valores dos campos para o Python."""
+    password_candidates = _visible_enabled(page.locator("input[type='password']"))
+    username_candidates = _visible_enabled(
+        page.locator(
+            "input[type='email'],input[type='text'],input[autocomplete='username'],"
+            "input[name*='user' i],input[name*='email' i]"
+        )
+    )
+    state = {
+        "username_candidate_count": len(username_candidates),
+        "password_candidate_count": len(password_candidates),
+        "username_prefilled": False,
+        "password_prefilled": False,
+        "credential_values_exported": False,
+    }
+    username = username_candidates[0] if len(username_candidates) == 1 else None
+    password = password_candidates[0] if len(password_candidates) == 1 else None
+    try:
+        if username is not None:
+            state["username_prefilled"] = bool(
+                username.evaluate("el => Boolean(el && typeof el.value === 'string' && el.value.length > 0)")
+            )
+        if password is not None:
+            state["password_prefilled"] = bool(
+                password.evaluate("el => Boolean(el && typeof el.value === 'string' && el.value.length > 0)")
+            )
+    except Exception:
+        state["username_prefilled"] = False
+        state["password_prefilled"] = False
+    return state, password
+
+
 def _wait_for_reusable_session(
     page,
     context,
@@ -117,6 +163,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="mantém o mesmo navegador aberto para login humano e continua automaticamente após autenticação",
     )
     parser.add_argument(
+        "--submit-saved-login",
+        action="store_true",
+        help="envia Enter somente se login e senha estiverem ambos preenchidos; os valores nunca são exportados",
+    )
+    parser.add_argument(
         "--auth-timeout-seconds",
         type=int,
         default=MAX_HUMAN_LOGIN_TIMEOUT_SECONDS,
@@ -132,7 +183,8 @@ def main() -> int:
         timeout = effective_auth_timeout_seconds(ns.allow_human_login, ns.auth_timeout_seconds)
         print(
             f"mode=one_shot target={TARGET_METHOD} {TARGET_HOST}{TARGET_ROUTE} "
-            f"production_enabled=false allow_human_login={str(ns.allow_human_login).lower()} auth_timeout_seconds={timeout}"
+            f"production_enabled=false allow_human_login={str(ns.allow_human_login).lower()} "
+            f"submit_saved_login={str(ns.submit_saved_login).lower()} auth_timeout_seconds={timeout}"
         )
         return 0
     if not ns.once:
@@ -164,6 +216,14 @@ def main() -> int:
         schemes: set[str] = set()
         hosts: set[str] = set()
         target_responses = []
+        saved_login_state = {
+            "username_candidate_count": 0,
+            "password_candidate_count": 0,
+            "username_prefilled": False,
+            "password_prefilled": False,
+            "credential_values_exported": False,
+        }
+        saved_login_submit_attempted = False
         context = p.chromium.launch_persistent_context(
             str(base.PROFILE_DIR), headless=False, args=["--disable-sync"]
         )
@@ -174,6 +234,17 @@ def main() -> int:
             page.goto(base.PORTAL_URL, wait_until="domcontentloaded")
             page.wait_for_timeout(2500)
 
+            if ns.submit_saved_login and is_login_like_url(page.url):
+                saved_login_state, password_field = _saved_login_prefill_state(page)
+                if saved_login_submission_is_allowed(
+                    explicit_request=True,
+                    username_prefilled=saved_login_state["username_prefilled"],
+                    password_prefilled=saved_login_state["password_prefilled"],
+                ) and password_field is not None:
+                    password_field.press("Enter")
+                    saved_login_submit_attempted = True
+                    page.wait_for_timeout(1500)
+
             auth, nav, nav_meta, stale_login_fragment = _wait_for_reusable_session(
                 page, context, schemes, hosts, auth_timeout_seconds
             )
@@ -183,6 +254,9 @@ def main() -> int:
                     "initial_authentication",
                     human_login_required=True,
                     human_login_flow_enabled=ns.allow_human_login,
+                    saved_login_submission_requested=ns.submit_saved_login,
+                    saved_login_submit_attempted=saved_login_submit_attempted,
+                    saved_login=saved_login_state,
                     navigation=nav_meta,
                     login_like_url=is_login_like_url(page.url),
                 )
@@ -234,6 +308,9 @@ def main() -> int:
             run_evidence["location"] = url_fingerprint(page.url)
             run_evidence["human_login_required"] = False
             run_evidence["human_login_flow_enabled"] = ns.allow_human_login
+            run_evidence["saved_login_submission_requested"] = ns.submit_saved_login
+            run_evidence["saved_login_submit_attempted"] = saved_login_submit_attempted
+            run_evidence["saved_login"] = saved_login_state
             run_evidence["stale_login_fragment_accepted"] = stale_login_fragment
             run_evidence["functional_output_path"] = str(ns.output)
             _write_json(ns.evidence, run_evidence)

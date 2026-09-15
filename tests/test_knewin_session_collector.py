@@ -14,6 +14,7 @@ from src.knewin_session_collector import (
     build_run_evidence,
     functional_output,
     normalize_publications,
+    saved_login_submission_is_allowed,
     session_reuse_ui_is_valid,
     validate_live_response,
     validate_runtime_gate,
@@ -85,6 +86,19 @@ def main() -> int:
     assert session_reuse_ui_is_valid("oidc", {"candidate_count": 1, "top_score": 75, "ambiguous": False}) is False
     assert session_reuse_ui_is_valid("oidc", {"candidate_count": 2, "top_score": 135, "ambiguous": True}) is False
     assert session_reuse_ui_is_valid("oidc", None) is False
+
+    assert saved_login_submission_is_allowed(
+        explicit_request=True, username_prefilled=True, password_prefilled=True
+    ) is True
+    assert saved_login_submission_is_allowed(
+        explicit_request=False, username_prefilled=True, password_prefilled=True
+    ) is False
+    assert saved_login_submission_is_allowed(
+        explicit_request=True, username_prefilled=False, password_prefilled=True
+    ) is False
+    assert saved_login_submission_is_allowed(
+        explicit_request=True, username_prefilled=True, password_prefilled=False
+    ) is False
 
     assert effective_auth_timeout_seconds(False, 600) == 30
     assert effective_auth_timeout_seconds(True, 600) == 600
