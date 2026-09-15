@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 import zipfile
 
-from src.clipping import Candidate, Decision, classify, idempotency_key
+from src.clipping import Candidate, Decision, canonical_url, classify, idempotency_key
 
 CONTRACT_VERSION = "1.0.0"
 MONTHS = (
@@ -104,6 +104,7 @@ def build_model(items: list[ClassifiedItem]) -> dict:
     for item in items:
         candidate, decision = item.candidate, item.decision
         dt = _parse_date(candidate.published_at)
+        link = canonical_url(candidate.url)
         if decision.status == "include":
             month_rows[MONTHS[dt.month - 1]].append([
                 dt.strftime("%d/%m/%Y"),
@@ -113,12 +114,12 @@ def build_model(items: list[ClassifiedItem]) -> dict:
                 decision.business_unit,
                 decision.person,
                 None,
-                candidate.url,
+                link,
             ])
         elif decision.status == "review":
             review_rows.append([
                 dt.strftime("%d/%m/%Y"), candidate.source, candidate.title,
-                decision.reason, candidate.url, item.key,
+                decision.reason, link, item.key,
             ])
         elif decision.status == "exclude":
             excluded += 1
