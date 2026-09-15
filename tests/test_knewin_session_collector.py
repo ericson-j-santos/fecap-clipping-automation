@@ -7,6 +7,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from scripts.collect_knewin_publications import effective_auth_timeout_seconds
 from src.json_schema_probe import json_shape
 from src.knewin_session_collector import (
     SessionCollectorError,
@@ -84,6 +85,17 @@ def main() -> int:
     assert session_reuse_ui_is_valid("oidc", {"candidate_count": 1, "top_score": 75, "ambiguous": False}) is False
     assert session_reuse_ui_is_valid("oidc", {"candidate_count": 2, "top_score": 135, "ambiguous": True}) is False
     assert session_reuse_ui_is_valid("oidc", None) is False
+
+    assert effective_auth_timeout_seconds(False, 600) == 30
+    assert effective_auth_timeout_seconds(True, 600) == 600
+    assert effective_auth_timeout_seconds(True, 30) == 30
+    for invalid in (29, 601):
+        try:
+            effective_auth_timeout_seconds(True, invalid)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("timeout humano fora do limite deveria bloquear")
 
     payload = sample_payload()
     runtime = runtime_for(payload)

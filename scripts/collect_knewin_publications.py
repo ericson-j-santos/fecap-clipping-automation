@@ -29,6 +29,7 @@ DEFAULT_RUNTIME_EVIDENCE = ROOT / "evidence" / "private" / "knewin-runtime-valid
 DEFAULT_OUTPUT = ROOT / "data" / "private" / "knewin-fecap-items.json"
 DEFAULT_RUN_EVIDENCE = ROOT / "evidence" / "private" / "knewin-authenticated-collector-run.json"
 SESSION_REUSE_TIMEOUT_SECONDS = 30
+MAX_HUMAN_LOGIN_TIMEOUT_SECONDS = 600
 
 
 def _is_target(response) -> bool:
@@ -70,8 +71,24 @@ def _blocked(path: Path, phase: str, **extra) -> int:
     return 50
 
 
-def _wait_for_reusable_session(page, context, schemes: set[str], hosts: set[str]):
-    deadline = time.monotonic() + SESSION_REUSE_TIMEOUT_SECONDS
+def effective_auth_timeout_seconds(allow_human_login: bool, requested: int) -> int:
+    if not allow_human_login:
+        return SESSION_REUSE_TIMEOUT_SECONDS
+    if requested < SESSION_REUSE_TIMEOUT_SECONDS or requested > MAX_HUMAN_LOGIN_TIMEOUT_SECONDS:
+        raise ValueError(
+            f"auth-timeout-seconds deve ficar entre {SESSION_REUSE_TIMEOUT_SECONDS} e {MAX_HUMAN_LOGIN_TIMEOUT_SECONDS}"
+        )
+    return requested
+
+
+def _wait_for_reusable_session(
+    page,
+    context,
+    schemes: set[str],
+    hosts: set[str],
+    timeout_seconds: int,
+):
+    deadline = time.monotonic() + timeout_seconds
     last_auth = None
     last_nav_meta: dict = {}
     while time.monotonic() < deadline:
@@ -94,6 +111,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--evidence", type=Path, default=DEFAULT_RUN_EVIDENCE)
     parser.add_argument("--once", action="store_true", help="autoriza somente uma coleta interativa, sem agendamento")
+    parser.add_argument(
+        "--allow-human-login",
+        action="store_true",
+        help="mantém o mesmo navegador aberto para login humano e continua automaticamente após autenticação",
+    )
+    parser.add_argument(
+        "--auth-timeout-seconds",
+        type=int,
+        default=MAX_HUMAN_LOGIN_TIMEOUT_SECONDS,
+        help="tempo máximo para login humano; usado somente com --allow-human-login",
+    )
     parser.add_argument("--check", action="store_true")
     return parser.parse_args(argv)
 
@@ -101,10 +129,20 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main() -> int:
     ns = parse_args(sys.argv[1:])
     if ns.check:
-        print(f"mode=one_shot target={TARGET_METHOD} {TARGET_HOST}{TARGET_ROUTE} production_enabled=false")
+        timeout = effective_auth_timeout_seconds(ns.allow_human_login, ns.auth_timeout_seconds)
+        print(
+            f"mode=one_shot target={TARGET_METHOD} {TARGET_HOST}{TARGET_ROUTE} "
+            f"production_enabled=false allow_human_login={str(ns.allow_human_login).lower()} auth_timeout_seconds={timeout}"
+        )
         return 0
     if not ns.once:
         return _blocked(ns.evidence, "one_shot_authorization_missing")
+    try:
+        auth_timeout_seconds = effective_auth_timeout_seconds(
+            ns.allow_human_login, ns.auth_timeout_seconds
+        )
+    except ValueError as exc:
+        return _blocked(ns.evidence, "invalid_auth_timeout", error=str(exc))
     if not ns.runtime_evidence.is_file():
         return _blocked(ns.evidence, "runtime_evidence_missing")
 
@@ -137,13 +175,14 @@ def main() -> int:
             page.wait_for_timeout(2500)
 
             auth, nav, nav_meta, stale_login_fragment = _wait_for_reusable_session(
-                page, context, schemes, hosts
+                page, context, schemes, hosts, auth_timeout_seconds
             )
             if auth is None or nav is None or not session_reuse_ui_is_valid(auth.auth_mode, nav_meta):
                 return _blocked(
                     ns.evidence,
                     "initial_authentication",
                     human_login_required=True,
+                    human_login_flow_enabled=ns.allow_human_login,
                     navigation=nav_meta,
                     login_like_url=is_login_like_url(page.url),
                 )
@@ -194,6 +233,7 @@ def main() -> int:
             run_evidence["auth_mode"] = auth.auth_mode
             run_evidence["location"] = url_fingerprint(page.url)
             run_evidence["human_login_required"] = False
+            run_evidence["human_login_flow_enabled"] = ns.allow_human_login
             run_evidence["stale_login_fragment_accepted"] = stale_login_fragment
             run_evidence["functional_output_path"] = str(ns.output)
             _write_json(ns.evidence, run_evidence)
