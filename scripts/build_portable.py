@@ -22,6 +22,7 @@ SAFE_FILES = (
     "src/knewin_discovery.py",
     "src/knewin_runtime_validation.py",
     "src/knewin_session_collector.py",
+    "src/onedrive_homologation.py",
     "src/session_auth_probe.py",
     "src/sharepoint_homologation.py",
     "scripts/analyze_knewin_inventory.py",
@@ -30,6 +31,7 @@ SAFE_FILES = (
     "scripts/collect_knewin_publications.py",
     "scripts/local_doctor.py",
     "scripts/prepare_knewin_collector.py",
+    "scripts/publish_onedrive_homologation.py",
     "scripts/publish_sharepoint_homologation.py",
     "scripts/setup_local.py",
     "scripts/probe_knewin_session.py",
@@ -49,6 +51,7 @@ SAFE_FILES = (
     "tests/test_knewin_guided_probe.py",
     "tests/test_knewin_runtime_validation.py",
     "tests/test_knewin_session_collector.py",
+    "tests/test_onedrive_homologation.py",
     "tests/test_session_auth_probe.py",
     "tests/test_sharepoint_homologation.py",
 )
