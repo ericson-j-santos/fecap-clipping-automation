@@ -2,24 +2,25 @@
 
 ## Fonte do contrato
 
-O layout foi recuperado da gravação original da rotina Knewin/FECAP e não foi inventado pelo gerador.
+O contrato foi reconciliado com duas evidências: a gravação original da rotina Knewin/FECAP e os workbooks históricos reais de clipping encontrados no Drive (`Clipping - Maio.xlsx`, `Clipping - Junho.xlsx`, etc.).
 
-As abas mensais seguem o padrão `Janeiro` a `Dezembro` e usam, nesta ordem:
+O cabeçalho efetivamente observado nos arquivos reais é:
 
-`DATA | VEÍCULO | TIER | MÍDIA | ORIGEM | ASSUNTO | FONTE | UN.NEG | LINK`
+`DATA | MÍDIA | VEÍCULO | TIER | UNID. NEGÓCIO | FONTE | ASSUNTO | LINK`
+
+A homologação mantém abas mensais no mesmo artefato para facilitar o E2E atual, mas preserva exatamente esse contrato de linha.
 
 ## Mapeamento atual
 
 | Coluna | Origem | Regra |
 | --- | --- | --- |
 | DATA | `published_at` | `dd/mm/aaaa` |
+| MÍDIA | — | manter em branco enquanto o coletor não persistir o tipo de mídia |
 | VEÍCULO | `source` | valor observado no Knewin |
-| TIER | classificação | preencher somente quando existir configuração evidenciada |
-| MÍDIA | — | manter em branco; não inferir |
-| ORIGEM | — | manter em branco até regra de negócio ser confirmada |
-| ASSUNTO | — | manter em branco; a gravação evidencia curadoria manual |
+| TIER | classificação/configuração | preencher somente quando existir configuração evidenciada |
+| UNID. NEGÓCIO | `config/people.json` | unidade associada ao porta-voz identificado |
 | FONTE | porta-voz identificado | preencher quando a classificação identificar pessoa conhecida |
-| UN.NEG | `config/people.json` | unidade associada ao porta-voz identificado |
+| ASSUNTO | — | manter em branco; não inferir tema automaticamente neste incremento |
 | LINK | `url` | URL canônica da notícia |
 
 ## Estados
@@ -40,4 +41,4 @@ A chave por item continua sendo a SHA-256 já usada pelo domínio (`canonical_ur
 
 O Excel é destino **local de homologação**. `external_destination_enabled=false`, `scheduled=false` e `production_enabled=false` permanecem obrigatórios.
 
-SharePoint só pode ser habilitado depois de evidenciar os três identificadores do destino: site, biblioteca e caminho/arquivo. Nenhum deles deve ser inventado ou inferido de outro projeto.
+Os workbooks históricos localizados no Google Drive servem como evidência do contrato, não como autorização para substituir arquivos existentes. SharePoint só pode ser habilitado depois de evidenciar site, biblioteca e caminho/arquivo do destino atual. Nenhum identificador deve ser inventado ou herdado de outro projeto.
