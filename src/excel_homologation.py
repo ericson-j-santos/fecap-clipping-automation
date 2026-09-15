@@ -17,8 +17,8 @@ MONTHS = (
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 )
 MONTH_HEADERS = (
-    "DATA", "VEÍCULO", "TIER", "MÍDIA", "ORIGEM",
-    "ASSUNTO", "FONTE", "UN.NEG", "LINK",
+    "DATA", "MÍDIA", "VEÍCULO", "TIER",
+    "UNID. NEGÓCIO", "FONTE", "ASSUNTO", "LINK",
 )
 REVIEW_HEADERS = ("DATA", "VEÍCULO", "TÍTULO", "MOTIVO", "LINK", "IDEMPOTENCY_KEY")
 CONTROL_HEADERS = ("Indicador", "Valor")
@@ -106,8 +106,14 @@ def build_model(items: list[ClassifiedItem]) -> dict:
         dt = _parse_date(candidate.published_at)
         if decision.status == "include":
             month_rows[MONTHS[dt.month - 1]].append([
-                dt.strftime("%d/%m/%Y"), candidate.source, decision.tier,
-                None, None, None, decision.person, decision.business_unit, candidate.url,
+                dt.strftime("%d/%m/%Y"),
+                None,
+                candidate.source,
+                decision.tier,
+                decision.business_unit,
+                decision.person,
+                None,
+                candidate.url,
             ])
         elif decision.status == "review":
             review_rows.append([
@@ -120,7 +126,7 @@ def build_model(items: list[ClassifiedItem]) -> dict:
             raise ExcelHomologationError(f"status de classificação inválido: {decision.status}")
 
     for rows in month_rows.values():
-        rows.sort(key=lambda row: (row[0], str(row[1]), str(row[8])))
+        rows.sort(key=lambda row: (row[0], str(row[2]), str(row[7])))
     review_rows.sort(key=lambda row: (row[0], str(row[1]), str(row[4])))
     included = sum(len(rows) for rows in month_rows.values())
     return {
@@ -159,10 +165,9 @@ def _sheet_xml(headers: tuple[str, ...], rows: list[list[object]], widths: tuple
         f'<col min="{i+1}" max="{i+1}" width="{width}" customWidth="1"/>'
         for i, width in enumerate(widths)
     )
-    row_xml = []
-    row_xml.append('<row r="1" ht="20" customHeight="1">' + "".join(
+    row_xml = ['<row r="1" ht="20" customHeight="1">' + "".join(
         _cell_xml(1, i, value, 1) for i, value in enumerate(headers)
-    ) + '</row>')
+    ) + '</row>']
     for r_idx, row in enumerate(rows, start=2):
         row_xml.append(f'<row r="{r_idx}">' + "".join(
             _cell_xml(r_idx, c_idx, value) for c_idx, value in enumerate(row)
@@ -188,10 +193,10 @@ def _control_rows(model: dict) -> list[list[object]]:
         ["Publicados nas abas mensais", counts["include"]],
         ["Fila de revisão", counts["review"]],
         ["Excluídos", counts["exclude"]],
+        ["MÍDIA", "Em branco enquanto o coletor não persistir o tipo de mídia"],
         ["TIER", "Em branco quando não houver configuração evidenciada"],
-        ["MÍDIA", "Em branco; não inferir"],
-        ["ORIGEM", "Em branco; regra ainda não evidenciada"],
         ["ASSUNTO", "Em branco; curadoria não automatizada"],
+        ["Contrato histórico", "DATA | MÍDIA | VEÍCULO | TIER | UNID. NEGÓCIO | FONTE | ASSUNTO | LINK"],
         ["Destino SharePoint", "Desabilitado até site/biblioteca/caminho serem evidenciados"],
         ["Produção/agendamento", "Desabilitados"],
     ]
@@ -200,11 +205,11 @@ def _control_rows(model: dict) -> list[list[object]]:
 def _package_bytes(model: dict) -> bytes:
     sheet_names = list(MONTHS) + ["Revisao", "Controle"]
     sheets = []
-    month_widths = (13, 28, 9, 12, 15, 30, 24, 18, 60)
+    month_widths = (13, 12, 28, 9, 22, 24, 30, 60)
     for month in MONTHS:
         sheets.append((MONTH_HEADERS, model["month_rows"][month], month_widths))
     sheets.append((REVIEW_HEADERS, model["review_rows"], (13, 28, 48, 46, 60, 68)))
-    sheets.append((CONTROL_HEADERS, _control_rows(model), (32, 78)))
+    sheets.append((CONTROL_HEADERS, _control_rows(model), (32, 90)))
 
     content_types = [
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -245,8 +250,7 @@ def _package_bytes(model: dict) -> bytes:
         )
     workbook_rels.append(
         f'<Relationship Id="rId{len(sheets)+1}" '
-        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" '
-        'Target="styles.xml"/>'
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
     )
     workbook_rels.append('</Relationships>')
 
