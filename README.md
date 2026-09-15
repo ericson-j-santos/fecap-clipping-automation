@@ -15,7 +15,7 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 - sonda automática para `https://news.knewin.com/#/login`: implementada;
 - coleta autenticada real no Knewin News: aprovada no desktop pessoal;
 - classificação/idempotência sobre lote Knewin real: aprovada;
-- Excel local de homologação com contrato do vídeo: implementado e determinístico;
+- Excel local de homologação com contrato reconciliado com os workbooks históricos FECAP: implementado e determinístico;
 - publicação SharePoint: bloqueada até site, biblioteca e caminho do arquivo serem evidenciados.
 
 ## Regra inicial
@@ -45,7 +45,7 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 11. Para validar sem gravar o workbook:
     `python scripts/build_homologation_excel.py --dry-run`
 
-O contrato do Excel está em `docs/excel-homologation-contract.md`. As abas mensais usam `DATA | VEÍCULO | TIER | MÍDIA | ORIGEM | ASSUNTO | FONTE | UN.NEG | LINK`. Campos sem regra evidenciada permanecem em branco; o gerador não inventa `TIER`, `MÍDIA`, `ORIGEM` ou `ASSUNTO`.
+O contrato do Excel está em `docs/excel-homologation-contract.md`. O cabeçalho confirmado nos workbooks históricos reais é `DATA | MÍDIA | VEÍCULO | TIER | UNID. NEGÓCIO | FONTE | ASSUNTO | LINK`. Campos sem regra evidenciada permanecem em branco; neste incremento o gerador não inventa `MÍDIA`, `TIER` ou `ASSUNTO`.
 
 Para apenas diagnosticar sem instalar dependências:
 
