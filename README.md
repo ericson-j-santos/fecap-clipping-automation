@@ -13,8 +13,10 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 - esquema estrutural das respostas JSON sem valores: implementado;
 - plano do coletor vinculado ao endpoint e aos esquemas observados por SHA-256: implementado;
 - sonda automática para `https://news.knewin.com/#/login`: implementada;
-- coleta autenticada de notícias no portal Knewin: pendente de evidência real no desktop/notebook pessoal;
-- Excel/SharePoint de homologação: pendente.
+- coleta autenticada real no Knewin News: aprovada no desktop pessoal;
+- classificação/idempotência sobre lote Knewin real: aprovada;
+- Excel local de homologação com contrato do vídeo: implementado e determinístico;
+- publicação SharePoint: bloqueada até site, biblioteca e caminho do arquivo serem evidenciados.
 
 ## Regra inicial
 - `include`: porta-voz/professor/coordenador da FECAP participa editorialmente;
@@ -31,11 +33,19 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
    `python tests/e2e_public_news.py`
 5. Inicie a sonda autenticada automática no portal correto do Knewin News:
    `python scripts/probe_knewin_news.py`
-6. Faça somente o login humano quando solicitado pelo portal. A sonda espera até 10 minutos, detecta a saída de `#/login` e tenta localizar de forma fail-closed a área de clipping/notícias e o campo de busca.
+6. Faça somente o login humano quando solicitado pelo portal. A sonda espera até 10 minutos e localiza de forma fail-closed a área de clipping/notícias e o campo de busca.
 7. Classifique as rotas e esquemas sanitizados observados:
    `python scripts/analyze_knewin_inventory.py`
-8. Gere o plano fail-closed do coletor a partir do endpoint e dos esquemas realmente observados:
+8. Gere o plano fail-closed do coletor:
    `python scripts/prepare_knewin_collector.py`
+9. Após o runtime estar validado, execute uma coleta one-shot:
+   `python scripts/collect_knewin_publications.py --once`
+10. Gere o Excel local de homologação a partir da saída privada do coletor:
+    `python scripts/build_homologation_excel.py`
+11. Para validar sem gravar o workbook:
+    `python scripts/build_homologation_excel.py --dry-run`
+
+O contrato do Excel está em `docs/excel-homologation-contract.md`. As abas mensais usam `DATA | VEÍCULO | TIER | MÍDIA | ORIGEM | ASSUNTO | FONTE | UN.NEG | LINK`. Campos sem regra evidenciada permanecem em branco; o gerador não inventa `TIER`, `MÍDIA`, `ORIGEM` ou `ASSUNTO`.
 
 Para apenas diagnosticar sem instalar dependências:
 
@@ -47,13 +57,13 @@ Para preparar sem instalar o Chromium:
 
 Não copie perfil Chromium, cookies, tokens, `localStorage`, `sessionStorage`, arquivos de `evidence/private` ou chaves da API Knewin entre computadores.
 
-A sonda Knewin grava em `evidence/private/knewin-auth-probe.json` somente metadados sanitizados. Para respostas JSON de até 1 MiB, o corpo pode ser inspecionado em memória exclusivamente para extrair nomes estruturais de campos e tipos (`object`, `array`, `string`, `number`, etc.); valores escalares nunca são persistidos. Campos com nomes dinâmicos/inseguros são substituídos por hash. Respostas de login/SSO são excluídas dessa inspeção.
+A sonda Knewin grava em `evidence/private/knewin-auth-probe.json` somente metadados sanitizados. Para respostas JSON de até 1 MiB, o corpo pode ser inspecionado em memória exclusivamente para extrair nomes estruturais de campos e tipos; valores escalares nunca são persistidos. Respostas de login/SSO são excluídas dessa inspeção.
 
-O analisador gera `evidence/private/knewin-endpoint-candidates.json` associando cada candidato às variantes estruturais observadas. `prepare_knewin_collector.py` não acessa a rede e recusa descoberta sem `PASS`, inventários truncados, rota de autenticação, host fora do contexto Knewin, método/status não permitidos, esquema ausente/adulterado ou qualquer evidência sem `values_persisted=false` e `secrets_captured=false`. Quando aprovado, gera `evidence/private/knewin-collector-plan.json` com `network_enabled=false` e `evidence_binding_sha256` determinístico.
+O analisador gera `evidence/private/knewin-endpoint-candidates.json`. `prepare_knewin_collector.py` não acessa a rede e recusa descoberta sem evidência válida. O coletor one-shot mantém produção e agendamento desabilitados. O gerador Excel também mantém `external_destination_enabled=false`, portanto não publica em SharePoint automaticamente.
 
 ## Pacote portátil
 
-Gere um ZIP seguro com somente código, configuração e testes:
+Gere um ZIP seguro com somente código, configuração, documentação e testes:
 
 `python scripts/build_portable.py`
 
@@ -61,10 +71,11 @@ Saída padrão:
 
 `dist/fecap-clipping-portable.zip`
 
-O ZIP contém `PORTABLE-MANIFEST.json` com tamanho e SHA-256 de cada arquivo e exclui deliberadamente sessão Knewin e evidências privadas. O CI também publica esse ZIP como artefato `fecap-clipping-portable`.
+O ZIP contém `PORTABLE-MANIFEST.json` com tamanho e SHA-256 de cada arquivo e exclui deliberadamente sessão Knewin, dados privados, workbooks gerados e evidências privadas. O CI também publica esse ZIP como artefato `fecap-clipping-portable`.
 
 ## Executar
 `python tests/e2e_public_news.py`
 
 ## Evidência
-`evidence/e2e-public-real-news.json`
+- pública/determinística: `evidence/e2e-public-real-news.json`
+- privada Knewin/Excel: `evidence/private/` (não versionada)
