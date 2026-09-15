@@ -2,8 +2,13 @@ from __future__ import annotations
 
 from hashlib import sha256
 import io
+from pathlib import Path
+import sys
 import zipfile
 from xml.etree import ElementTree as ET
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 from src.excel_homologation import (
     CONTRACT_VERSION,
@@ -79,6 +84,7 @@ def main() -> int:
         assert "Ahmed El Khatib" in september
         assert "Graduação" in september
         assert "utm_source" not in september
+        assert "UNID. NEGÓCIO" in september
 
         review = archive.read("xl/worksheets/sheet13.xml").decode("utf-8")
         for header in REVIEW_HEADERS:
