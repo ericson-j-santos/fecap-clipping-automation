@@ -32,6 +32,10 @@ jobs:
         run: python tests/test_onedrive_homologation.py
       - name: Validar entrada do publicador OneDrive
         run: python scripts/publish_onedrive_homologation.py --check
+      - name: Validar pipeline Pareto one-shot
+        run: python tests/test_homologation_pipeline.py
+      - name: Validar entrada do pipeline Pareto
+        run: python scripts/run_homologation_pipeline.py --check
       - name: Validar contrato SharePoint one-shot
         run: python tests/test_sharepoint_homologation.py
       - name: Validar entrada do publicador SharePoint
@@ -59,7 +63,7 @@ jobs:
       - name: Validar entrada do coletor autenticado
         run: python scripts/collect_knewin_publications.py --check
       - name: Validar sintaxe dos scripts interativos
-        run: python -m py_compile scripts/probe_knewin_session.py scripts/probe_knewin_session_auto.py scripts/probe_knewin_news.py scripts/probe_knewin_news_guided.py scripts/analyze_knewin_inventory.py scripts/prepare_knewin_collector.py scripts/validate_knewin_publications_runtime.py scripts/collect_knewin_publications.py scripts/build_homologation_excel.py scripts/publish_onedrive_homologation.py scripts/publish_sharepoint_homologation.py
+        run: python -m py_compile scripts/probe_knewin_session.py scripts/probe_knewin_session_auto.py scripts/probe_knewin_news.py scripts/probe_knewin_news_guided.py scripts/analyze_knewin_inventory.py scripts/prepare_knewin_collector.py scripts/validate_knewin_publications_runtime.py scripts/collect_knewin_publications.py scripts/build_homologation_excel.py scripts/publish_onedrive_homologation.py scripts/publish_sharepoint_homologation.py scripts/run_homologation_pipeline.py
       - name: Gerar pacote portátil
         run: python scripts/build_portable.py
       - name: Publicar pacote portátil
