@@ -48,6 +48,21 @@ def validate_idempotency(first: dict, second: dict) -> None:
         raise ValueError("SHA-256 do workbook divergiu entre as duas publicações")
 
 
+def extract_excel_counts(evidence: dict) -> dict[str, int]:
+    counts = evidence.get("counts")
+    if not isinstance(counts, dict):
+        raise ValueError("evidência Excel não contém counts válido")
+    result: dict[str, int] = {}
+    for key in ("items", "include", "review", "exclude"):
+        value = counts.get(key)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"evidência Excel contém contagem inválida: {key}")
+        result[key] = value
+    if result["items"] != result["include"] + result["review"] + result["exclude"]:
+        raise ValueError("contagens Excel não fecham com o total de itens")
+    return result
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Executa Knewin -> Excel -> OneDrive de homologação em modo one-shot e fail-closed"
@@ -129,6 +144,13 @@ def main() -> int:
         _write_json(ns.pipeline_evidence, {"status": "BLOCKED", "failed_stage": "build_excel", "stages": stages, "scheduled": False, "production_enabled": False})
         return 50
 
+    try:
+        excel = _read_json(ns.excel_evidence)
+        counts = extract_excel_counts(excel)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        _write_json(ns.pipeline_evidence, {"status": "BLOCKED", "failed_stage": "excel_evidence", "reason": str(exc), "stages": stages, "scheduled": False, "production_enabled": False})
+        return 50
+
     publish_command = [
         sys.executable,
         "scripts/publish_onedrive_homologation.py",
@@ -163,7 +185,6 @@ def main() -> int:
             _write_json(ns.pipeline_evidence, {"status": "BLOCKED", "failed_stage": "verify_idempotency", "reason": str(exc), "stages": stages, "scheduled": False, "production_enabled": False})
             return 50
 
-    excel = _read_json(ns.excel_evidence)
     payload = {
         "status": "PASS",
         "mode": "one_shot",
@@ -176,9 +197,10 @@ def main() -> int:
         "workbook_sha256": first_evidence.get("workbook_sha256"),
         "first_publish_action": first_evidence.get("action"),
         "second_publish_action": second_evidence.get("action") if second_evidence else None,
-        "include_count": excel.get("include_count"),
-        "review_count": excel.get("review_count"),
-        "exclude_count": excel.get("exclude_count"),
+        "item_count": counts["items"],
+        "include_count": counts["include"],
+        "review_count": counts["review"],
+        "exclude_count": counts["exclude"],
     }
     _write_json(ns.pipeline_evidence, payload)
     print(json.dumps(payload, ensure_ascii=False, indent=2))

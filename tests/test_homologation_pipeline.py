@@ -4,7 +4,6 @@ import importlib.util
 from pathlib import Path
 import subprocess
 import sys
-import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "run_homologation_pipeline.py"
@@ -60,3 +59,32 @@ def test_idempotency_requires_same_sha_and_already_present() -> None:
         assert "already_present" in str(exc)
     else:
         raise AssertionError("deveria exigir already_present na segunda execução")
+
+
+def test_extract_excel_counts_uses_nested_contract() -> None:
+    evidence = {
+        "status": "PASS",
+        "counts": {"items": 10, "include": 3, "review": 6, "exclude": 1},
+    }
+    assert module.extract_excel_counts(evidence) == {
+        "items": 10,
+        "include": 3,
+        "review": 6,
+        "exclude": 1,
+    }
+
+
+def test_extract_excel_counts_fails_closed() -> None:
+    invalid_cases = [
+        {},
+        {"counts": None},
+        {"counts": {"items": 10, "include": 3, "review": 6, "exclude": None}},
+        {"counts": {"items": 11, "include": 3, "review": 6, "exclude": 1}},
+    ]
+    for evidence in invalid_cases:
+        try:
+            module.extract_excel_counts(evidence)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"deveria bloquear contagens inválidas: {evidence}")
