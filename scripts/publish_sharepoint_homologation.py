@@ -67,6 +67,20 @@ def effective_auth_timeout_seconds(allow_human_login: bool, requested: int) -> i
     return requested
 
 
+def validate_organization_domain(value: str) -> str:
+    domain = str(value or "").strip().casefold()
+    labels = domain.split(".")
+    valid_label = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+    if (
+        not domain
+        or len(domain) > 253
+        or len(labels) < 2
+        or any(not valid_label.fullmatch(label) for label in labels)
+    ):
+        raise ValueError("organization-domain inválido")
+    return domain
+
+
 def _is_login_like(page) -> bool:
     host = (urlparse(page.url).hostname or "").casefold()
     if host in {
@@ -135,6 +149,47 @@ def _click_named(page, patterns: tuple[str, ...]) -> bool:
             except Exception:
                 continue
     return False
+
+
+def _prepare_organization_login(page, organization_domain: str) -> bool:
+    if not organization_domain:
+        return False
+    domain = validate_organization_domain(organization_domain)
+    try:
+        body = normalize_text(page.locator("body").inner_text(timeout=2000))
+    except Exception:
+        body = ""
+
+    find_org = "encontrar sua organizacao" in body or "find your organization" in body
+    if not find_org:
+        if _click_named(page, (r"op[cç][oõ]es de entrada", r"sign.?in options")):
+            page.wait_for_timeout(500)
+        _click_named(
+            page,
+            (
+                r"conta corporativa.*estudante",
+                r"work.*school account",
+                r"work or school account",
+            ),
+        )
+        page.wait_for_timeout(700)
+        try:
+            body = normalize_text(page.locator("body").inner_text(timeout=2000))
+        except Exception:
+            body = ""
+        find_org = "encontrar sua organizacao" in body or "find your organization" in body
+
+    if not find_org:
+        return False
+    inputs = _visible_enabled(page.locator("input"), 10)
+    if len(inputs) != 1:
+        return False
+    inputs[0].fill(domain)
+    page.wait_for_timeout(300)
+    if not _click_named(page, (r"^avan[cç]ar$", r"^next$")):
+        return False
+    page.wait_for_timeout(1000)
+    return True
 
 
 def _collect_site_candidates(page) -> list[SiteCandidate]:
@@ -348,6 +403,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--create-if-missing", action="store_true")
     parser.add_argument("--allow-human-login", action="store_true")
     parser.add_argument("--auth-timeout-seconds", type=int, default=MAX_HUMAN_LOGIN_TIMEOUT_SECONDS)
+    parser.add_argument("--organization-domain", default="")
     parser.add_argument("--check", action="store_true")
     return parser.parse_args(argv)
 
@@ -356,13 +412,19 @@ def main() -> int:
     ns = parse_args(sys.argv[1:])
     try:
         timeout = effective_auth_timeout_seconds(ns.allow_human_login, ns.auth_timeout_seconds)
+        organization_domain = (
+            validate_organization_domain(ns.organization_domain)
+            if ns.organization_domain
+            else ""
+        )
     except ValueError as exc:
-        return _blocked(ns.evidence, "invalid_auth_timeout", error=str(exc))
+        return _blocked(ns.evidence, "invalid_configuration", error=str(exc))
 
     if ns.check:
         print(
             "mode=one_shot sharepoint=true scheduled=false production_enabled=false "
-            f"create_if_missing={str(ns.create_if_missing).lower()} auth_timeout_seconds={timeout}"
+            f"create_if_missing={str(ns.create_if_missing).lower()} auth_timeout_seconds={timeout} "
+            f"organization_domain_configured={str(bool(organization_domain)).lower()}"
         )
         return 0
     if not ns.once:
@@ -388,6 +450,11 @@ def main() -> int:
             page = context.pages[0] if context.pages else context.new_page()
             page.goto(PORTAL_URL, wait_until="domcontentloaded")
             page.wait_for_timeout(2000)
+            organization_domain_applied = False
+            if organization_domain and _is_login_like(page):
+                organization_domain_applied = _prepare_organization_login(
+                    page, organization_domain
+                )
             if not _wait_for_auth(page, timeout):
                 return _blocked(
                     ns.evidence,
@@ -395,6 +462,8 @@ def main() -> int:
                     human_login_required=True,
                     human_login_flow_enabled=ns.allow_human_login,
                     login_like_url=_is_login_like(page),
+                    organization_domain_configured=bool(organization_domain),
+                    organization_domain_applied=organization_domain_applied,
                 )
 
             _click_named(page, (r"ver todos os sites", r"see all sites", r"meus sites", r"my sites"))
@@ -469,6 +538,8 @@ def main() -> int:
             evidence["profile_persisted"] = True
             evidence["human_login_required"] = False
             evidence["human_login_flow_enabled"] = ns.allow_human_login
+            evidence["organization_domain_configured"] = bool(organization_domain)
+            evidence["organization_domain_applied"] = organization_domain_applied
             _write_json(ns.evidence, evidence)
             print(json.dumps(evidence, ensure_ascii=False, indent=2))
             return 0
