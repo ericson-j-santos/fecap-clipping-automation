@@ -22,6 +22,15 @@ jobs:
         run: python scripts/local_doctor.py
       - name: Validar plano do setup local
         run: python tests/test_setup_local.py
+      - name: Validar contrato do bootstrap Windows Knewin
+        run: python tests/test_knewin_windows_bootstrap_contract.py
+      - name: Validar sintaxe do bootstrap PowerShell
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/knewin-session-capture.ps1", [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }
       - name: Validar construção do pacote portátil
         run: python tests/test_build_portable.py
       - name: Validar Excel de homologação determinístico
