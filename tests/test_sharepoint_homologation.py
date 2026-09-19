@@ -17,6 +17,7 @@ from src.sharepoint_homologation import (
     site_candidate,
     workbook_sha256,
 )
+from scripts.publish_sharepoint_homologation import validate_organization_domain
 
 
 def main() -> int:
@@ -64,6 +65,15 @@ def main() -> int:
     assert evidence["production_enabled"] is False
     assert evidence["credentials_persisted"] is False
     assert evidence["tokens_persisted"] is False
+
+    assert validate_organization_domain("TIERI659.ONMICROSOFT.COM") == "tieri659.onmicrosoft.com"
+    for invalid in ("", "user@example.com", "https://example.com", "example", "-bad.example.com"):
+        try:
+            validate_organization_domain(invalid)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"domínio inválido deveria bloquear: {invalid}")
 
     print("test_sharepoint_homologation: OK")
     return 0
