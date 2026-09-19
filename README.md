@@ -16,7 +16,8 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 - coleta autenticada real no Knewin News: aprovada no desktop pessoal;
 - classificação/idempotência sobre lote Knewin real: aprovada;
 - Excel local de homologação com contrato reconciliado com os workbooks históricos FECAP: implementado e determinístico;
-- publicação SharePoint: bloqueada até site, biblioteca e caminho do arquivo serem evidenciados.
+- publicação SharePoint: destino adicional, fora do caminho crítico; descoberta concluída e publicação bloqueada por escopo somente leitura e tenant não corporativo (`docs/sharepoint-corporate-discovery.md`);
+- governança da branch `main`: sem proteção efetiva; ruleset alvo especificado em `docs/governance-main-branch.md`.
 
 ## Regra inicial
 - `include`: porta-voz/professor/coordenador da FECAP participa editorialmente;
