@@ -48,6 +48,20 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 
 O contrato do Excel está em `docs/excel-homologation-contract.md`. O cabeçalho confirmado nos workbooks históricos reais é `DATA | MÍDIA | VEÍCULO | TIER | UNID. NEGÓCIO | FONTE | ASSUNTO | LINK`. Campos sem regra evidenciada permanecem em branco; neste incremento o gerador não inventa `MÍDIA`, `TIER` ou `ASSUNTO`.
 
+### Windows: bootstrap idempotente da sessão Knewin
+
+No PowerShell 5.1+:
+
+`powershell -ExecutionPolicy Bypass -File scripts/knewin-session-capture.ps1`
+
+O wrapper cria um `venv` isolado em `~/.fecap-clipping/venv`, valida `pip`, instala/repara Python 3.12 pelo `winget` somente quando necessário, garante Playwright/Chromium e reutiliza a sonda versionada `scripts/probe_knewin_session.py`. O log de bootstrap é JSONL e fica em `~/.fecap-clipping/evidence/knewin-session-bootstrap.jsonl`.
+
+Para ambiente sem rede:
+
+`powershell -ExecutionPolicy Bypass -File scripts/knewin-session-capture.ps1 -Offline -Wheelhouse C:\caminho\wheelhouse`
+
+O modo offline nunca chama `winget` nem índice remoto do `pip`; se Python, wheelhouse ou Chromium local estiverem ausentes, encerra com código explícito em vez de tentar uma instalação parcial.
+
 Para apenas diagnosticar sem instalar dependências:
 
 `python scripts/setup_local.py --check-only`
