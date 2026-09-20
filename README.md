@@ -56,6 +56,12 @@ No PowerShell 5.1+:
 
 O wrapper cria um `venv` isolado em `~/.fecap-clipping/venv`, valida `pip`, instala/repara Python 3.12 pelo `winget` somente quando necessário, garante Playwright/Chromium e reutiliza a sonda versionada `scripts/probe_knewin_session.py`. O log de bootstrap é JSONL e fica em `~/.fecap-clipping/evidence/knewin-session-bootstrap.jsonl`.
 
+Para execução por agente/Command Gateway, use a rota Python governada, sem liberar PowerShell genérico:
+
+`python scripts/knewin_session_bootstrap.py --bootstrap-only`
+
+Esse modo valida/cria o venv, garante `pip`, Playwright e Chromium e encerra antes de abrir a autenticação Knewin. Para seguir até a sonda, remova `--bootstrap-only`. O script exige Python 3.11+ já disponível porque o próprio Command Gateway usa Python; quando Python não existir no host, a rota humana PowerShell permanece responsável pelo bootstrap inicial.
+
 Para ambiente sem rede:
 
 `powershell -ExecutionPolicy Bypass -File scripts/knewin-session-capture.ps1 -Offline -Wheelhouse C:\caminho\wheelhouse`
