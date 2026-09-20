@@ -16,7 +16,7 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 - coleta autenticada real no Knewin News: aprovada no desktop pessoal;
 - classificação/idempotência sobre lote Knewin real: aprovada;
 - Excel local de homologação com contrato reconciliado com os workbooks históricos FECAP: implementado e determinístico;
-- publicação SharePoint: destino adicional, fora do caminho crítico; descoberta concluída e publicação bloqueada por escopo somente leitura e tenant não corporativo (`docs/sharepoint-corporate-discovery.md`);
+- publicação SharePoint: destino adicional, fora do caminho crítico; site/biblioteca/pasta e workbook canônico validados, com replay sem duplicação (`docs/sharepoint-corporate-discovery.md`);
 - governança da branch `main`: sem proteção efetiva; ruleset alvo especificado em `docs/governance-main-branch.md`.
 
 ## Regra inicial
@@ -80,7 +80,7 @@ Não copie perfil Chromium, cookies, tokens, `localStorage`, `sessionStorage`, a
 
 A sonda Knewin grava em `evidence/private/knewin-auth-probe.json` somente metadados sanitizados. Para respostas JSON de até 1 MiB, o corpo pode ser inspecionado em memória exclusivamente para extrair nomes estruturais de campos e tipos; valores escalares nunca são persistidos. Respostas de login/SSO são excluídas dessa inspeção.
 
-O analisador gera `evidence/private/knewin-endpoint-candidates.json`. `prepare_knewin_collector.py` não acessa a rede e recusa descoberta sem evidência válida. O coletor one-shot mantém produção e agendamento desabilitados. O gerador Excel também mantém `external_destination_enabled=false`, portanto não publica em SharePoint automaticamente.
+O analisador gera `evidence/private/knewin-endpoint-candidates.json`. `prepare_knewin_collector.py` não acessa a rede e recusa descoberta sem evidência válida. O coletor one-shot mantém produção e agendamento desabilitados. O gerador Excel mantém `external_destination_enabled=false`; destinos externos são tratados por publicadores one-shot separados e continuam fora de produção/agendamento.
 
 ## Pacote portátil
 
