@@ -2,13 +2,13 @@
 
 ## Estado evidenciado
 
-Consulta à API do GitHub em 2026-09-19:
+Consulta à API do GitHub em 2026-09-20:
 
 | Campo | Valor |
 | --- | --- |
 | Repositório | `ericson-j-santos/fecap-clipping-automation` |
 | Branch padrão | `main` |
-| SHA | `d52ca9999f919062a0bda3f4ad48e9382ad85ca9` |
+| SHA | `daf69d58b48b8a74f74fc0bfca88aca748f1cf1a` |
 | `protected` | `false` |
 
 Sem proteção efetiva, o rótulo `draft`, o texto "NUNCA MERGEAR" e o CI verde são **sinalização**,
