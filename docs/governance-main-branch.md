@@ -55,3 +55,26 @@ ferramentas disponíveis à sessão automatizada. É **ação humana** no painel
 
 `GET /repos/ericson-j-santos/fecap-clipping-automation/branches/main` retorna `protected: true`,
 e uma tentativa controlada de push direto em `main` é rejeitada pelo servidor.
+
+
+## Auditoria one-shot automatizada
+
+A verificação de estado pode ser executada sem alterar qualquer configuração administrativa:
+
+`python scripts/audit_main_governance.py`
+
+Com a `main` ainda desprotegida, o resultado esperado é `status=BLOCKED` e código de saída 50.
+Depois da aplicação do ruleset, o mesmo comando deve retornar `status=PASS` e código 0.
+
+O auditor:
+
+- consulta somente `GET /repos/{owner}/{repo}/branches/main`;
+- não usa token para este repositório público;
+- não tenta criar/editar ruleset;
+- grava somente evidência sanitizada em `evidence/private/main-governance-audit.json`;
+- mantém `scheduled=false` e `production_enabled=false`;
+- não considera `protected=true` suficiente, sozinho, para fechar a issue: o controle negativo de push direto e o PR normal ainda devem ser validados.
+
+Para validar somente o contrato sem rede:
+
+`python scripts/audit_main_governance.py --check`

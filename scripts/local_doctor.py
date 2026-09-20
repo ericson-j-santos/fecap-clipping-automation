@@ -9,9 +9,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_FILES = (
     "src/clipping.py",
+    "src/github_governance.py",
     "src/knewin_api.py",
     "src/session_auth_probe.py",
     "config/people.json",
+    "scripts/audit_main_governance.py",
     "scripts/probe_knewin_session.py",
     "scripts/probe_knewin_session_auto.py",
     "scripts/probe_knewin_news.py",
