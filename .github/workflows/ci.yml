@@ -24,6 +24,10 @@ jobs:
         run: python tests/test_setup_local.py
       - name: Validar contrato do bootstrap Windows Knewin
         run: python tests/test_knewin_windows_bootstrap_contract.py
+      - name: Validar bootstrap Knewin nativo do Gateway
+        run: python tests/test_knewin_gateway_bootstrap.py
+      - name: Validar entrada do bootstrap Knewin nativo do Gateway
+        run: python scripts/knewin_session_bootstrap.py --check
       - name: Validar sintaxe do bootstrap PowerShell
         shell: pwsh
         run: |
