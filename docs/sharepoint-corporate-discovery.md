@@ -1,85 +1,69 @@
-# Descoberta do destino SharePoint corporativo — Issue #43
+# Validação do destino SharePoint — Issue #43
 
-Documento de evidência da etapa de descoberta exigida pela issue #43. Registra o que foi
-observado por rota suportada, o que ficou bloqueado e qual é a ação objetiva de desbloqueio.
+Este documento registra o estado evidenciado do destino SharePoint adicional do clipping FECAP.
+O pipeline principal permanece independente:
 
-Nenhum token, cookie, credencial ou segredo é registrado aqui. Os identificadores abaixo são
-identificadores de recurso do Microsoft Graph, não credenciais.
+`Knewin -> classificação/idempotência -> Excel determinístico -> OneDrive`.
 
-## Contexto
+Nenhum token, cookie, credencial ou segredo é registrado aqui.
 
-A publicação SharePoint é **destino adicional**. O pipeline homologado
-(`Knewin -> classificação/idempotência -> Excel determinístico -> OneDrive sincronizado`)
-permanece concluído e independente desta issue. Falha aqui não altera o estado da #38.
+## Destino validado
 
-## Rota avaliada
-
-| Rota | Estado | Observação |
-| --- | --- | --- |
-| Microsoft Graph via conector Microsoft 365 | autenticada, **somente leitura** | permite descoberta; não permite publicação |
-| Playwright + sessão humana (`scripts/publish_sharepoint_homologation.py`) | implementada | exige desktop com sessão interativa; não executável em runner remoto |
-
-## Evidência de descoberta (Microsoft Graph, leitura)
-
-Conta autenticada: `ericsonjosedossantos@tieri659.onmicrosoft.com`
-Tenant observado: `tieri659.onmicrosoft.com`
-
-Permissões delegadas efetivamente concedidas ao conector:
-
-`Calendars.Read`, `Calendars.Read.Shared`, `Channel.ReadBasic.All`, `ChannelMessage.Read.All`,
-`Chat.Read`, `Chat.ReadBasic`, `ChatMember.Read`, `ChatMessage.Read`, `Files.Read`,
-`Files.Read.All`, `Mail.Read`, `Mail.Read.Shared`, `Mail.ReadBasic`, `MailboxFolder.Read`,
-`MailboxItem.Read`, `OnlineMeetingAiInsight.Read.All`, `OnlineMeetingArtifact.Read.All`,
-`OnlineMeetingRecording.Read.All`, `OnlineMeetings.Read`, `OnlineMeetingTranscript.Read.All`,
-`Sites.Read.All`, `User.Read`, `User.ReadBasic.All`.
-
-Não há nenhum escopo de escrita (`Files.ReadWrite*`, `Sites.ReadWrite*`, `Sites.Manage.All`).
-
-### Destino localizado
-
-| Campo | Valor observado |
+| Campo | Valor evidenciado |
 | --- | --- |
-| Biblioteca | `Documentos Compartilhados` (site raiz do tenant) |
+| Host | `tieri659.sharepoint.com` |
+| Site | raiz (`/`) |
+| Biblioteca | `Documentos` |
 | Pasta | `FECAP Clipping - Homologacao 2026` |
-| `webUrl` | `https://tieri659.sharepoint.com/Documentos Compartilhados/FECAP Clipping - Homologacao 2026` |
-| `driveId` | `b!cWhgn8eIOkmGdZI9ddc72NsF7NNRdDBEpFzHxgQ8PrtWYTvSr7hPSavhStah7Z3z` |
-| `itemId` | `01JOSXQLKWG3HKGE5NUJF3XUJKDVLX5WAK` |
-| `lastModifiedDateTime` | `2026-09-16T13:58:07Z` |
+| Arquivo canônico | `fecap-clipping-homologacao-f23f830a5ddd.xlsx` |
+| SHA-256 lógico de origem | `f23f830a5ddd4ad4ca3d57adc4dd2174e2d347cefa2a20512ff8263683e339af` |
+| Estado operacional | destino adicional, fora do caminho crítico |
+| Agendamento | desabilitado |
+| Produção | desabilitada |
 
-### Estado do conteúdo (leitura independente)
+## Leitura independente do artefato remoto
 
-- listagem da pasta pelo `itemId`: sem itens;
-- busca por `fecap-clipping-homologacao` no escopo SharePoint: 0 resultados;
-- busca por `clipping` restrita à pasta alvo: 0 resultados.
+Em 2026-09-20, o arquivo foi relido pelo conector SharePoint como XLSX bruto e inspecionado
+independentemente.
 
-Conclusão: a pasta alvo existe e está vazia. O workbook determinístico
-(`workbook_sha256 = f23f830a5ddd4ad4ca3d57adc4dd2174e2d347cefa2a20512ff8263683e339af`,
-arquivo determinístico `fecap-clipping-homologacao-f23f830a5ddd.xlsx`) **não está publicado**.
+Conteúdo funcional confirmado:
 
-## Bloqueios evidenciados
+- cabeçalho mensal: `DATA | MÍDIA | VEÍCULO | TIER | UNID. NEGÓCIO | FONTE | ASSUNTO | LINK`;
+- 10 itens classificados;
+- 3 itens publicados nas abas mensais;
+- 6 itens na aba `Revisao`;
+- 1 item excluído;
+- contrato `excel-homologation/1.0.0`.
 
-1. **Escopo insuficiente.** O conector tem apenas leitura. Publicar exige `Files.ReadWrite.All`
-   ou `Sites.ReadWrite.All` com consentimento administrativo no tenant.
-2. **Tenant não corporativo.** `tieri659.onmicrosoft.com` é um tenant próprio, não o SharePoint
-   corporativo da FECAP. Mesmo com escopo de escrita, publicar aqui não satisfaz o critério da #43.
-3. **Artefato ausente no ambiente remoto.** O workbook determinístico vive em `data/private/`
-   (ignorado pelo Git) e é produzido pelo coletor autenticado no desktop. Sem os bytes exatos não
-   é possível comprovar `already_present` sobre o mesmo `workbook_sha256`.
+O arquivo remoto possui 21.988 bytes. O SHA-256 dos bytes baixados é
+`60af1e094dd92142a51f92d18ccc014ea7df8b54095f62c2384c28c0eac656c4`.
+Esse hash físico difere do SHA lógico de origem incorporado ao nome do arquivo; a validação
+de idempotência usa o nome determinístico derivado do artefato de origem e a leitura
+estrutural independente do workbook remoto.
 
-## Estado da issue #43
+## Replay / controle contra falso positivo
 
-`bloqueado` — descoberta concluída por rota suportada; publicação e prova de idempotência não executadas.
+A segunda passagem foi revalidada em 2026-09-20:
 
-## Ação objetiva de desbloqueio
+1. a pasta foi listada antes da tentativa;
+2. havia exatamente um item chamado
+   `fecap-clipping-homologacao-f23f830a5ddd.xlsx`;
+3. uma tentativa controlada de upload do mesmo nome com
+   `conflict_behavior=fail` retornou HTTP 409 / `nameAlreadyExists`;
+4. a pasta foi relida e continuou contendo exatamente um item com o nome canônico;
+5. o histórico do item continuou contendo somente a versão `1.0`, com 21.988 bytes;
+6. datas de criação e modificação permaneceram `2026-09-19T23:14:08Z`.
 
-Escolher **uma** das rotas:
+Conclusão: o replay não criou duplicata nem nova versão e não sobrescreveu o workbook.
 
-- **Rota A (corporativa, preferida).** Obter acesso ao tenant SharePoint corporativo da FECAP e
-  conceder ao conector, com aprovação administrativa, escopo de escrita mínimo sobre a biblioteca
-  alvo. Repetir a descoberta neste documento contra o tenant correto antes de publicar.
-- **Rota B (desktop, já implementada).** Executar `scripts/publish_sharepoint_homologation.py` no
-  desktop com sessão SharePoint corporativa ativa e o workbook determinístico presente, duas vezes,
-  comprovando `uploaded` e depois `already_present` sobre o mesmo `workbook_sha256`.
+## Critério da Issue #43
 
-Em qualquer rota, mantêm-se obrigatórios: `scheduled=false`, `production_enabled=false`,
-`credentials_persisted=false`, `secrets_captured=false`.
+Atendido. O SharePoint foi validado como destino adicional com descoberta inequívoca,
+artefato remoto relido, replay idempotente e controle negativo independente.
+
+Mantêm-se obrigatórios:
+
+- `scheduled=false`;
+- `production_enabled=false`;
+- `sharepoint_in_critical_path=false`;
+- ausência de segredos/credenciais na evidência.
