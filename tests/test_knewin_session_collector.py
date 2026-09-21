@@ -12,8 +12,13 @@ from src.json_schema_probe import json_shape
 from src.knewin_session_collector import (
     SessionCollectorError,
     build_run_evidence,
+    filter_publications_by_date,
     functional_output,
+    merge_publications,
+    next_page_offset,
     normalize_publications,
+    parse_date_window,
+    request_with_offset,
     saved_login_submission_is_allowed,
     session_reuse_ui_is_valid,
     validate_live_response,
@@ -111,6 +116,56 @@ def main() -> int:
         else:
             raise AssertionError("timeout humano fora do limite deveria bloquear")
 
+    start, end = parse_date_window("2026-09-14", "2026-09-14")
+    assert start.isoformat() == "2026-09-14" and end.isoformat() == "2026-09-14"
+    try:
+        parse_date_window("2026-09-15", "2026-09-14")
+    except SessionCollectorError:
+        pass
+    else:
+        raise AssertionError("janela invertida deveria bloquear")
+
+    page1 = sample_payload()
+    page1["count"] = 3
+    page1["page"] = [page1["page"][0]]
+    page2 = sample_payload()
+    page2["count"] = 3
+    page2["offset"] = 1
+    page2["page"] = [page2["page"][1]]
+    page3 = sample_payload()
+    page3["count"] = 3
+    page3["offset"] = 2
+    page3["page"] = [{
+        "id": "news-3",
+        "title": "FECAP fora da janela",
+        "url": "https://example.invalid/noticia-3",
+        "source": "Veículo C",
+        "publishedDate": "2026-09-15T09:00:00Z",
+        "content": "FECAP.",
+    }]
+    assert next_page_offset(page1) == 1
+    assert next_page_offset(page2) == 2
+    assert next_page_offset(page3) is None
+
+    body = {"query": "Fecap", "offset": 0, "filters": {"language": "pt"}}
+    changed = request_with_offset(body, 20)
+    assert changed["offset"] == 20
+    assert body["offset"] == 0
+    try:
+        request_with_offset({"a": {"offset": 0}, "b": {"offset": 10}}, 20)
+    except SessionCollectorError:
+        pass
+    else:
+        raise AssertionError("offset ambíguo deveria bloquear")
+
+    p1 = normalize_publications(page1)
+    p2 = normalize_publications(page2)
+    p3 = normalize_publications(page3)
+    merged = merge_publications(p1, p2, p3)
+    assert [item.external_id for item in merged] == ["news-1", "news-2", "news-3"]
+    filtered = filter_publications_by_date(merged, start, end)
+    assert [item.external_id for item in filtered] == ["news-1", "news-2"]
+
     payload = sample_payload()
     runtime = runtime_for(payload)
     expected_shape = validate_runtime_gate(runtime)
@@ -122,8 +177,12 @@ def main() -> int:
     assert publications[0].candidate.title == "FECAP em destaque"
     assert publications[0].candidate.source == "Veículo A"
 
-    output = functional_output("Fecap", runtime, publications)
+    output = functional_output(
+        "Fecap", runtime, publications, start_date="2026-09-01", end_date="2026-09-30"
+    )
     assert output["mode"] == "one_shot"
+    assert output["start_date"] == "2026-09-01"
+    assert output["end_date"] == "2026-09-30"
     assert output["scheduled"] is False
     assert output["production_enabled"] is False
     assert output["credentials_persisted"] is False
@@ -134,12 +193,25 @@ def main() -> int:
     assert "Autor A" not in serialized_output
     assert "educação" not in serialized_output
 
-    evidence = build_run_evidence(runtime, publications, 200, actual_shape, "b" * 64)
+    evidence = build_run_evidence(
+        runtime,
+        publications,
+        200,
+        actual_shape,
+        "b" * 64,
+        pages_fetched=2,
+        source_count=20,
+        start_date="2026-09-01",
+        end_date="2026-09-30",
+    )
     serialized = json.dumps(evidence, ensure_ascii=False)
     assert "FECAP em destaque" not in serialized
     assert "Conteúdo público da notícia" not in serialized
     assert evidence["status"] == "PASS"
     assert evidence["collected_count"] == 2
+    assert evidence["pages_fetched"] == 2
+    assert evidence["source_count"] == 20
+    assert evidence["start_date"] == "2026-09-01"
     assert evidence["collector_network_enabled"] is False
     assert evidence["values_persisted"] is False
     assert evidence["secrets_captured"] is False
