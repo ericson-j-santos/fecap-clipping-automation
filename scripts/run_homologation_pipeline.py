@@ -69,6 +69,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--term", default="Fecap")
+    parser.add_argument("--start-date", help="data inicial inclusiva YYYY-MM-DD")
+    parser.add_argument("--end-date", help="data final inclusiva YYYY-MM-DD")
     parser.add_argument("--destination-root", type=Path)
     parser.add_argument("--skip-collect", action="store_true")
     parser.add_argument("--allow-human-login", action="store_true")
@@ -118,6 +120,18 @@ def main() -> int:
             "--evidence",
             str(ns.collect_evidence),
         ]
+        if ns.start_date or ns.end_date:
+            if not ns.start_date or not ns.end_date:
+                _write_json(ns.pipeline_evidence, {
+                    "status": "BLOCKED",
+                    "failed_stage": "collection_window",
+                    "reason": "start_date e end_date devem ser informados juntos",
+                    "stages": stages,
+                    "scheduled": False,
+                    "production_enabled": False,
+                })
+                return 50
+            collect += ["--start-date", ns.start_date, "--end-date", ns.end_date]
         if ns.allow_human_login:
             collect += ["--allow-human-login", "--auth-timeout-seconds", str(ns.auth_timeout_seconds)]
         result = _run("collect", collect)
@@ -194,6 +208,8 @@ def main() -> int:
         "production_enabled": False,
         "stages": stages,
         "collector_skipped": bool(ns.skip_collect),
+        "start_date": ns.start_date,
+        "end_date": ns.end_date,
         "workbook_sha256": first_evidence.get("workbook_sha256"),
         "first_publish_action": first_evidence.get("action"),
         "second_publish_action": second_evidence.get("action") if second_evidence else None,
