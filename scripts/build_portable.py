@@ -13,6 +13,7 @@ SAFE_FILES = (
     "README.md",
     "requirements-local.txt",
     "config/people.json",
+    "config/video_enrichment.json",
     "docs/excel-homologation-contract.md",
     "docs/governance-main-branch.md",
     "src/clipping.py",
@@ -27,6 +28,7 @@ SAFE_FILES = (
     "src/onedrive_homologation.py",
     "src/session_auth_probe.py",
     "src/sharepoint_homologation.py",
+    "src/video_enrichment.py",
     "scripts/analyze_knewin_inventory.py",
     "scripts/audit_main_governance.py",
     "scripts/build_homologation_excel.py",
@@ -64,6 +66,7 @@ SAFE_FILES = (
     "tests/test_onedrive_homologation.py",
     "tests/test_session_auth_probe.py",
     "tests/test_sharepoint_homologation.py",
+    "tests/test_video_enrichment.py",
 )
 
 
