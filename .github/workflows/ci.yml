@@ -43,6 +43,8 @@ jobs:
         run: python tests/test_build_portable.py
       - name: Validar Excel de homologação determinístico
         run: python tests/test_excel_homologation.py
+      - name: Validar enriquecimento fail-closed do vídeo
+        run: python tests/test_video_enrichment.py
       - name: Validar entrada do gerador Excel
         run: python scripts/build_homologation_excel.py --check
       - name: Validar contrato OneDrive one-shot
