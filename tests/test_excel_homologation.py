@@ -84,7 +84,7 @@ def main() -> int:
         assert "Ahmed El Khatib" in september
         assert "Graduação" in september
         assert "utm_source" not in september
-        assert "UNID. NEGÓCIO" in september
+        assert "UN. NEG." in september
 
         review = archive.read("xl/worksheets/sheet13.xml").decode("utf-8")
         for header in REVIEW_HEADERS:
