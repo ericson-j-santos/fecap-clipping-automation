@@ -14,11 +14,16 @@ sys.path.insert(0, str(ROOT))
 import scripts.probe_knewin_news as news
 import scripts.probe_knewin_session as base
 import scripts.probe_knewin_session_auto as auto
-from src.knewin_runtime_validation import TARGET_HOST, TARGET_METHOD, TARGET_ROUTE
+from src.knewin_runtime_validation import TARGET_HOST, TARGET_METHOD, TARGET_ROUTE, headers_for_replay
 from src.knewin_session_collector import (
     SessionCollectorError,
     build_run_evidence,
+    filter_publications_by_date,
     functional_output,
+    merge_publications,
+    next_page_offset,
+    parse_date_window,
+    request_with_offset,
     saved_login_submission_is_allowed,
     session_reuse_ui_is_valid,
     validate_live_response,
@@ -51,6 +56,54 @@ def _write_json(path: Path, payload: dict) -> bytes:
     raw = (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
     path.write_bytes(raw)
     return raw
+
+
+def _paginate_publications(context, response, runtime: dict, max_pages: int):
+    try:
+        first_payload = response.json()
+        first_publications, first_shape = validate_live_response(runtime, response.status, first_payload)
+        total = int(first_payload.get("count"))
+        request_payload = response.request.post_data_json
+        if not isinstance(request_payload, dict):
+            raise SessionCollectorError("requisição publications sem corpo JSON reutilizável")
+        replay_headers = headers_for_replay(response.request.headers)
+    except Exception as exc:
+        raise SessionCollectorError(f"falha ao preparar paginação: {type(exc).__name__}") from exc
+
+    all_publications = list(first_publications)
+    pages_fetched = 1
+    current_payload = first_payload
+    last_shape = first_shape
+
+    while True:
+        next_offset = next_page_offset(current_payload)
+        if next_offset is None:
+            break
+        if pages_fetched >= max_pages:
+            raise SessionCollectorError("max_pages atingido antes do fim da paginação")
+
+        replay_body = request_with_offset(request_payload, next_offset)
+        api_response = context.request.post(
+            response.url,
+            headers=replay_headers,
+            data=replay_body,
+            timeout=30000,
+        )
+        payload = api_response.json()
+        page_publications, last_shape = validate_live_response(
+            runtime, api_response.status, payload
+        )
+        if not page_publications:
+            raise SessionCollectorError("página vazia antes de atingir o count informado")
+        all_publications = merge_publications(all_publications, page_publications)
+        pages_fetched += 1
+        current_payload = payload
+
+    if len(all_publications) < total:
+        raise SessionCollectorError(
+            f"paginação incompleta: coletados={len(all_publications)} count={total}"
+        )
+    return all_publications, last_shape, pages_fetched, total
 
 
 def _blocked(path: Path, phase: str, **extra) -> int:
@@ -153,6 +206,9 @@ def _wait_for_reusable_session(
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Coletor one-shot autenticado do Knewin News")
     parser.add_argument("--term", default="Fecap")
+    parser.add_argument("--start-date", help="data inicial inclusiva no formato YYYY-MM-DD")
+    parser.add_argument("--end-date", help="data final inclusiva no formato YYYY-MM-DD")
+    parser.add_argument("--max-pages", type=int, default=100)
     parser.add_argument("--runtime-evidence", type=Path, default=DEFAULT_RUNTIME_EVIDENCE)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--evidence", type=Path, default=DEFAULT_RUN_EVIDENCE)
@@ -181,10 +237,14 @@ def main() -> int:
     ns = parse_args(sys.argv[1:])
     if ns.check:
         timeout = effective_auth_timeout_seconds(ns.allow_human_login, ns.auth_timeout_seconds)
+        parse_date_window(ns.start_date, ns.end_date)
+        if ns.max_pages < 1 or ns.max_pages > 1000:
+            raise ValueError("max_pages deve ficar entre 1 e 1000")
         print(
             f"mode=one_shot target={TARGET_METHOD} {TARGET_HOST}{TARGET_ROUTE} "
             f"production_enabled=false allow_human_login={str(ns.allow_human_login).lower()} "
-            f"submit_saved_login={str(ns.submit_saved_login).lower()} auth_timeout_seconds={timeout}"
+            f"submit_saved_login={str(ns.submit_saved_login).lower()} auth_timeout_seconds={timeout} "
+            f"date_window={str(bool(ns.start_date)).lower()} max_pages={ns.max_pages}"
         )
         return 0
     if not ns.once:
@@ -193,8 +253,11 @@ def main() -> int:
         auth_timeout_seconds = effective_auth_timeout_seconds(
             ns.allow_human_login, ns.auth_timeout_seconds
         )
-    except ValueError as exc:
-        return _blocked(ns.evidence, "invalid_auth_timeout", error=str(exc))
+        start_date, end_date = parse_date_window(ns.start_date, ns.end_date)
+        if ns.max_pages < 1 or ns.max_pages > 1000:
+            raise ValueError("max_pages deve ficar entre 1 e 1000")
+    except (ValueError, SessionCollectorError) as exc:
+        return _blocked(ns.evidence, "invalid_collection_window", error=str(exc))
     if not ns.runtime_evidence.is_file():
         return _blocked(ns.evidence, "runtime_evidence_missing")
 
@@ -287,8 +350,12 @@ def main() -> int:
                 target_responses[before],
             )
             try:
-                payload = response.json()
-                publications, response_shape = validate_live_response(runtime, response.status, payload)
+                publications, response_shape, pages_fetched, source_count = _paginate_publications(
+                    context, response, runtime, ns.max_pages
+                )
+                filtered_publications = filter_publications_by_date(
+                    publications, start_date, end_date
+                )
             except Exception as exc:
                 return _blocked(
                     ns.evidence,
@@ -297,11 +364,25 @@ def main() -> int:
                     response_status=getattr(response, "status", None),
                 )
 
-            output_payload = functional_output(ns.term, runtime, publications)
+            output_payload = functional_output(
+                ns.term,
+                runtime,
+                filtered_publications,
+                start_date=ns.start_date,
+                end_date=ns.end_date,
+            )
             output_raw = _write_json(ns.output, output_payload)
             output_digest = sha256(output_raw).hexdigest()
             run_evidence = build_run_evidence(
-                runtime, publications, response.status, response_shape, output_digest
+                runtime,
+                filtered_publications,
+                response.status,
+                response_shape,
+                output_digest,
+                pages_fetched=pages_fetched,
+                source_count=source_count,
+                start_date=ns.start_date,
+                end_date=ns.end_date,
             )
             run_evidence["phase"] = "authenticated_collection"
             run_evidence["auth_mode"] = auth.auth_mode

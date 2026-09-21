@@ -39,8 +39,10 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
    `python scripts/analyze_knewin_inventory.py`
 8. Gere o plano fail-closed do coletor:
    `python scripts/prepare_knewin_collector.py`
-9. Após o runtime estar validado, execute uma coleta one-shot:
-   `python scripts/collect_knewin_publications.py --once`
+9. Após o runtime estar validado, execute uma coleta one-shot. Para reproduzir o recorte mensal do vídeo:
+   `python scripts/collect_knewin_publications.py --once --start-date 2026-08-01 --end-date 2026-08-31`
+
+   O coletor reutiliza a requisição autenticada em memória, pagina `/restful/search/publications` até o `count` informado e só então aplica a janela inclusiva por `publishedDate`. Credenciais, headers e corpo bruto da API não são persistidos.
 10. Gere o Excel local de homologação a partir da saída privada do coletor:
     `python scripts/build_homologation_excel.py`
 11. Para validar sem gravar o workbook:
