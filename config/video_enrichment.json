@@ -1,0 +1,23 @@
+{
+  "format": 1,
+  "target": "video-2026-09-11",
+  "require_complete": true,
+  "default_media": "Online",
+  "tiers": {
+    "DIRECIONAL CONDOMÍNIOS": 2,
+    "Mercado Comum": 2
+  },
+  "origin_rules": [
+    {
+      "field": "title",
+      "contains_all": ["nota fiscal", "condom"],
+      "value": "Menção"
+    },
+    {
+      "field": "title",
+      "contains_all": ["déficit nominal", "contas públicas"],
+      "value": "Proativo"
+    }
+  ],
+  "subject_rules": []
+}
