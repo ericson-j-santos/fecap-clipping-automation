@@ -1,44 +1,52 @@
-# Contrato do Excel de homologação — v1.0.0
+# Contrato do Excel de homologação — v2.0.0
 
 ## Fonte do contrato
 
-O contrato foi reconciliado com duas evidências: a gravação original da rotina Knewin/FECAP e os workbooks históricos reais de clipping encontrados no Drive (`Clipping - Maio.xlsx`, `Clipping - Junho.xlsx`, etc.).
+O alvo funcional deste contrato é a gravação original da rotina Knewin/FECAP enviada em 11/09/2026. O vídeo mostra o workbook `Clipping_2026`, aba mensal `Agosto`, com nove colunas:
 
-O cabeçalho efetivamente observado nos arquivos reais é:
+`DATA | VEÍCULO | TIER | MÍDIA | ORIGEM | ASSUNTO | FONTE | UN. NEG. | LINK`
 
-`DATA | MÍDIA | VEÍCULO | TIER | UNID. NEGÓCIO | FONTE | ASSUNTO | LINK`
+Os workbooks históricos do Drive continuam como evidência auxiliar para valores de TIER, unidade de negócio, fonte e assunto. Eles não substituem o contrato visual do fluxo alvo quando houver divergência de estrutura.
 
-A homologação mantém abas mensais no mesmo artefato para facilitar o E2E atual, mas preserva exatamente esse contrato de linha.
-
-## Mapeamento atual
+## Mapeamento alvo
 
 | Coluna | Origem | Regra |
 | --- | --- | --- |
 | DATA | `published_at` | `dd/mm/aaaa` |
-| MÍDIA | — | manter em branco enquanto o coletor não persistir o tipo de mídia |
 | VEÍCULO | `source` | valor observado no Knewin |
-| TIER | classificação/configuração | preencher somente quando existir configuração evidenciada |
-| UNID. NEGÓCIO | `config/people.json` | unidade associada ao porta-voz identificado |
-| FONTE | porta-voz identificado | preencher quando a classificação identificar pessoa conhecida |
-| ASSUNTO | — | manter em branco; não inferir tema automaticamente neste incremento |
+| TIER | classificação/configuração | somente por configuração evidenciada |
+| MÍDIA | `config/video_enrichment.json` | alvo do vídeo: `Online`; pode ser substituído por regra explícita futura |
+| ORIGEM | regras versionadas | somente `Menção`/`Proativo` quando uma regra evidenciada casar de forma inequívoca |
+| ASSUNTO | regra versionada ou título | quando não houver normalização específica, usa o título da notícia, sem inventar tema |
+| FONTE | porta-voz identificado | nome conhecido em `config/people.json` |
+| UN. NEG. | `config/people.json` | unidade associada ao porta-voz |
 | LINK | `url` | URL canônica da notícia |
+
+## Fail-closed
+
+O fluxo de vídeo exige enriquecimento completo para publicação automática. Quando `require_complete=true`, qualquer item `include` sem TIER, MÍDIA, ORIGEM, ASSUNTO, FONTE ou UN. NEG. é rebaixado para `review`.
+
+Nada é preenchido por palpite silencioso.
+
+As duas combinações registradas inicialmente em `config/video_enrichment.json` vêm diretamente do vídeo:
+
+- Direcional Condomínios / Rosely Schwartz → TIER 2, Online, Menção, Extensão;
+- Mercado Comum / Ahmed El Khatib → TIER 2, Online, Proativo, Graduação.
+
+Novas regras precisam de evidência antes de entrar no arquivo de configuração.
 
 ## Estados
 
-- `include`: publicado na aba mensal correspondente.
-- `review`: não entra na aba mensal; vai para `Revisao` com motivo e chave SHA-256.
-- `exclude`: não é publicado no workbook.
-
-A aba `Controle` registra somente contagens e estado dos gates. Conteúdo integral da notícia, cookies, tokens, credenciais e resposta bruta do Knewin não fazem parte do workbook.
+- `include`: enriquecimento completo e publicação na aba mensal.
+- `review`: referência válida, mas decisão editorial ou enriquecimento incompleto.
+- `exclude`: item não publicado.
 
 ## Idempotência
 
-O gerador é determinístico: mesma entrada classificada + mesma configuração produzem exatamente os mesmos bytes e o mesmo `workbook_sha256`.
+O gerador continua determinístico: mesma entrada + mesmas regras produzem os mesmos bytes e o mesmo `workbook_sha256`.
 
-A chave por item continua sendo a SHA-256 já usada pelo domínio (`canonical_url | published_at | source`).
+A chave por item permanece `SHA-256(canonical_url | published_at | source)`.
 
-## Segurança e promoção
+## Segurança
 
-O Excel é destino **local de homologação**. `external_destination_enabled=false`, `scheduled=false` e `production_enabled=false` permanecem obrigatórios.
-
-Os workbooks históricos localizados no Google Drive servem como evidência do contrato, não como autorização para substituir arquivos existentes. SharePoint só pode ser habilitado depois de evidenciar site, biblioteca e caminho/arquivo do destino atual. Nenhum identificador deve ser inventado ou herdado de outro projeto.
+O workbook continua de homologação. `external_destination_enabled=false`, `scheduled=false` e `production_enabled=false` permanecem obrigatórios até o E2E do `Clipping_2026` operacional passar.

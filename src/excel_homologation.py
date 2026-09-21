@@ -10,15 +10,16 @@ from pathlib import Path
 import zipfile
 
 from src.clipping import Candidate, Decision, canonical_url, classify, idempotency_key
+from src.video_enrichment import VideoEnrichment, enrich_candidate
 
-CONTRACT_VERSION = "1.0.0"
+CONTRACT_VERSION = "2.0.0"
 MONTHS = (
     "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 )
 MONTH_HEADERS = (
-    "DATA", "MÍDIA", "VEÍCULO", "TIER",
-    "UNID. NEGÓCIO", "FONTE", "ASSUNTO", "LINK",
+    "DATA", "VEÍCULO", "TIER", "MÍDIA", "ORIGEM",
+    "ASSUNTO", "FONTE", "UN. NEG.", "LINK",
 )
 REVIEW_HEADERS = ("DATA", "VEÍCULO", "TÍTULO", "MOTIVO", "LINK", "IDEMPOTENCY_KEY")
 CONTROL_HEADERS = ("Indicador", "Valor")
@@ -34,6 +35,7 @@ class ExcelHomologationError(ValueError):
 class ClassifiedItem:
     candidate: Candidate
     decision: Decision
+    enrichment: VideoEnrichment
     key: str
 
 
@@ -88,12 +90,18 @@ def classify_items(
     candidates: list[Candidate],
     people: dict[str, str],
     tiers: dict[str, int] | None = None,
+    enrichment_rules: dict | None = None,
 ) -> list[ClassifiedItem]:
     tiers = tiers or {}
-    return [
-        ClassifiedItem(candidate, classify(candidate, people, tiers), idempotency_key(candidate))
-        for candidate in candidates
-    ]
+    rules = enrichment_rules or {}
+    result: list[ClassifiedItem] = []
+    for candidate in candidates:
+        decision = classify(candidate, people, tiers)
+        enrichment = enrich_candidate(candidate, decision, rules)
+        result.append(
+            ClassifiedItem(candidate, decision, enrichment, idempotency_key(candidate))
+        )
+    return result
 
 
 def build_model(items: list[ClassifiedItem]) -> dict:
@@ -102,32 +110,34 @@ def build_model(items: list[ClassifiedItem]) -> dict:
     excluded = 0
 
     for item in items:
-        candidate, decision = item.candidate, item.decision
+        candidate, decision, enrichment = item.candidate, item.decision, item.enrichment
         dt = _parse_date(candidate.published_at)
         link = canonical_url(candidate.url)
-        if decision.status == "include":
+        status = enrichment.status
+        if status == "include":
             month_rows[MONTHS[dt.month - 1]].append([
                 dt.strftime("%d/%m/%Y"),
-                None,
                 candidate.source,
-                decision.tier,
-                decision.business_unit,
-                decision.person,
-                None,
+                enrichment.tier,
+                enrichment.media,
+                enrichment.origin,
+                enrichment.subject,
+                enrichment.person,
+                enrichment.business_unit,
                 link,
             ])
-        elif decision.status == "review":
+        elif status == "review":
             review_rows.append([
                 dt.strftime("%d/%m/%Y"), candidate.source, candidate.title,
-                decision.reason, link, item.key,
+                enrichment.reason, link, item.key,
             ])
-        elif decision.status == "exclude":
+        elif status == "exclude":
             excluded += 1
         else:
-            raise ExcelHomologationError(f"status de classificação inválido: {decision.status}")
+            raise ExcelHomologationError(f"status de classificação inválido: {status}")
 
     for rows in month_rows.values():
-        rows.sort(key=lambda row: (row[0], str(row[2]), str(row[7])))
+        rows.sort(key=lambda row: (row[0], str(row[1]), str(row[8])))
     review_rows.sort(key=lambda row: (row[0], str(row[1]), str(row[4])))
     included = sum(len(rows) for rows in month_rows.values())
     return {
@@ -194,10 +204,10 @@ def _control_rows(model: dict) -> list[list[object]]:
         ["Publicados nas abas mensais", counts["include"]],
         ["Fila de revisão", counts["review"]],
         ["Excluídos", counts["exclude"]],
-        ["MÍDIA", "Em branco enquanto o coletor não persistir o tipo de mídia"],
-        ["TIER", "Em branco quando não houver configuração evidenciada"],
-        ["ASSUNTO", "Em branco; curadoria não automatizada"],
-        ["Contrato histórico", "DATA | MÍDIA | VEÍCULO | TIER | UNID. NEGÓCIO | FONTE | ASSUNTO | LINK"],
+        ["Contrato vídeo", "DATA | VEÍCULO | TIER | MÍDIA | ORIGEM | ASSUNTO | FONTE | UN. NEG. | LINK"],
+        ["Enriquecimento", "Itens incompletos permanecem em Revisao quando require_complete=true"],
+        ["MÍDIA", "Default/rule explícita do config; alvo do vídeo: Online"],
+        ["ORIGEM", "Somente por regra evidenciada; nunca inferir silenciosamente"],
         ["Destino SharePoint", "Desabilitado até site/biblioteca/caminho serem evidenciados"],
         ["Produção/agendamento", "Desabilitados"],
     ]
@@ -206,7 +216,7 @@ def _control_rows(model: dict) -> list[list[object]]:
 def _package_bytes(model: dict) -> bytes:
     sheet_names = list(MONTHS) + ["Revisao", "Controle"]
     sheets = []
-    month_widths = (13, 12, 28, 9, 22, 24, 30, 60)
+    month_widths = (13, 28, 9, 12, 14, 34, 24, 18, 60)
     for month in MONTHS:
         sheets.append((MONTH_HEADERS, model["month_rows"][month], month_widths))
     sheets.append((REVIEW_HEADERS, model["review_rows"], (13, 28, 48, 46, 60, 68)))
@@ -316,9 +326,10 @@ def build_workbook_bytes(
     collector_payload: object,
     people: dict[str, str],
     tiers: dict[str, int] | None = None,
+    enrichment_rules: dict | None = None,
 ) -> tuple[bytes, dict]:
     candidates = validate_collector_output(collector_payload)
-    classified = classify_items(candidates, people, tiers)
+    classified = classify_items(candidates, people, tiers, enrichment_rules)
     model = build_model(classified)
     workbook = _package_bytes(model)
     evidence = {
@@ -329,7 +340,8 @@ def build_workbook_bytes(
         "idempotency_key_set_sha256": sha256(
             "\n".join(sorted(item.key for item in classified)).encode("utf-8")
         ).hexdigest(),
-        "tiers_configured": bool(tiers),
+        "tiers_configured": bool(tiers) or bool((enrichment_rules or {}).get("tiers")),
+        "enrichment_required": bool((enrichment_rules or {}).get("require_complete")),
         "external_destination_enabled": False,
         "scheduled": False,
         "production_enabled": False,
@@ -345,8 +357,11 @@ def write_workbook(
     people: dict[str, str],
     output: Path,
     tiers: dict[str, int] | None = None,
+    enrichment_rules: dict | None = None,
 ) -> dict:
-    workbook, evidence = build_workbook_bytes(collector_payload, people, tiers)
+    workbook, evidence = build_workbook_bytes(
+        collector_payload, people, tiers, enrichment_rules
+    )
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(workbook)
     evidence["output_path"] = str(output)

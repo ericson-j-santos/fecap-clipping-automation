@@ -12,6 +12,7 @@ from src.excel_homologation import CONTRACT_VERSION, build_workbook_bytes
 
 DEFAULT_INPUT = ROOT / "data" / "private" / "knewin-fecap-items.json"
 DEFAULT_PEOPLE = ROOT / "config" / "people.json"
+DEFAULT_ENRICHMENT = ROOT / "config" / "video_enrichment.json"
 DEFAULT_OUTPUT = ROOT / "data" / "private" / "fecap-clipping-homologacao.xlsx"
 DEFAULT_EVIDENCE = ROOT / "evidence" / "private" / "knewin-excel-homologation.json"
 
@@ -33,6 +34,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
     parser.add_argument("--people", type=Path, default=DEFAULT_PEOPLE)
     parser.add_argument("--tiers", type=Path)
+    parser.add_argument("--enrichment", type=Path, default=DEFAULT_ENRICHMENT)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--evidence", type=Path, default=DEFAULT_EVIDENCE)
     parser.add_argument("--dry-run", action="store_true")
@@ -48,15 +50,18 @@ def main() -> int:
             "external_destination_enabled=false scheduled=false production_enabled=false"
         )
         return 0
-    if not ns.input.is_file() or not ns.people.is_file():
-        print("BLOCKED: input ou people.json ausente", file=sys.stderr)
+    if not ns.input.is_file() or not ns.people.is_file() or not ns.enrichment.is_file():
+        print("BLOCKED: input, people.json ou video_enrichment.json ausente", file=sys.stderr)
         return 50
 
     try:
         collector = _load_object(ns.input)
         people = _load_object(ns.people)
         tiers = _load_object(ns.tiers) if ns.tiers else {}
-        workbook, evidence = build_workbook_bytes(collector, people, tiers)
+        enrichment = _load_object(ns.enrichment)
+        workbook, evidence = build_workbook_bytes(
+            collector, people, tiers, enrichment_rules=enrichment
+        )
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         print(f"BLOCKED: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 50
