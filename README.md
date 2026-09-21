@@ -17,6 +17,7 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 - classificação/idempotência sobre lote Knewin real: aprovada;
 - Excel local de homologação com contrato de 9 colunas observado no vídeo: implementado e determinístico;
 - enriquecimento de TIER/MÍDIA/ORIGEM/ASSUNTO/FONTE/UN. NEG.: fail-closed por regras versionadas; itens sem evidência vão para revisão;
+- append no workbook operacional existente: implementado em OOXML, com validação do cabeçalho de 9 colunas e deduplicação global por URL canônica;
 - publicação SharePoint: destino adicional, fora do caminho crítico; site/biblioteca/pasta e workbook canônico validados, com replay sem duplicação (`docs/sharepoint-corporate-discovery.md`);
 - governança da branch `main`: sem proteção efetiva; ruleset alvo especificado em `docs/governance-main-branch.md`.
 
@@ -48,6 +49,8 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
     `python scripts/build_homologation_excel.py`
 11. Para validar sem gravar o workbook:
     `python scripts/build_homologation_excel.py --dry-run`
+12. Quando o `Clipping_2026.xlsx` operacional estiver inequivocamente identificado, valide primeiro em uma cópia:
+    `python scripts/append_operational_workbook.py --once --workbook Clipping_2026.xlsx --collector data/private/knewin-fecap-items.json --output Clipping_2026.validado.xlsx`
 
 O contrato do Excel está em `docs/excel-homologation-contract.md`. Para o fluxo-alvo do vídeo, a ordem é `DATA | VEÍCULO | TIER | MÍDIA | ORIGEM | ASSUNTO | FONTE | UN. NEG. | LINK`. As regras ficam em `config/video_enrichment.json`; com `require_complete=true`, qualquer item sem enriquecimento comprovado vai para `Revisao` em vez de receber valor inventado.
 

@@ -50,3 +50,23 @@ A chave por item permanece `SHA-256(canonical_url | published_at | source)`.
 ## Segurança
 
 O workbook continua de homologação. `external_destination_enabled=false`, `scheduled=false` e `production_enabled=false` permanecem obrigatórios até o E2E do `Clipping_2026` operacional passar.
+
+
+## Atualização do workbook operacional
+
+O módulo `src/operational_workbook.py` atualiza um workbook existente sem reconstruir o pacote inteiro:
+
+- valida o cabeçalho de nove colunas da aba mensal;
+- lê links existentes, inclusive hyperlinks externos OOXML;
+- deduplica por URL canônica entre as abas mensais;
+- anexa somente linhas `include` completas;
+- copia os identificadores de estilo da última linha existente;
+- atualiza `dimension`, `autoFilter` e referência de tabela quando presentes;
+- grava hyperlink externo para a nova coluna `LINK`;
+- em replay sem novidade, devolve exatamente os mesmos bytes.
+
+A entrada one-shot é:
+
+`python scripts/append_operational_workbook.py --once --workbook Clipping_2026.xlsx --collector data/private/knewin-fecap-items.json --output Clipping_2026.validado.xlsx`
+
+`--in-place` existe, mas só deve ser usado depois de comprovar a identidade do workbook operacional atual. Até lá, a validação usa cópia controlada.
