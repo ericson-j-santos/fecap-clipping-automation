@@ -336,9 +336,12 @@ def _update_refs(files: dict[str, bytes], sheet_path: str, root: ET.Element, hea
         target = rel.get("Target")
         if not target:
             continue
-        table_path = posixpath.normpath(
-            posixpath.join(posixpath.dirname(sheet_path), target)
-        )
+        if target.startswith("/"):
+            table_path = target.lstrip("/")
+        else:
+            table_path = posixpath.normpath(
+                posixpath.join(posixpath.dirname(sheet_path), target)
+            )
         raw_table = files.get(table_path)
         if raw_table is None:
             continue
@@ -385,19 +388,31 @@ def append_month_rows(workbook_bytes: bytes, month_rows: dict[str, list[list[obj
     existing_global: set[str] = set()
     prepared: dict[str, tuple[str, ET.Element, int, dict[int, str], dict[str, str]]] = {}
 
+    for month in MONTHS:
+        sheet_path = sheet_paths.get(month)
+        if not sheet_path or sheet_path not in files:
+            continue
+        root = ET.fromstring(files[sheet_path])
+        try:
+            header_row, _ = _find_header_row(root, shared)
+        except OperationalWorkbookError:
+            if month_rows.get(month):
+                raise
+            continue
+        existing_global.update(
+            _existing_links(files, sheet_path, root, shared, header_row)
+        )
+        if month_rows.get(month):
+            styles, row_attrs = _style_template(root, header_row)
+            prepared[month] = (sheet_path, root, header_row, styles, row_attrs)
+
     for month, rows in month_rows.items():
         if not rows:
             continue
         if month not in MONTHS:
             raise OperationalWorkbookError(f"mês inválido: {month}")
-        sheet_path = sheet_paths.get(month)
-        if not sheet_path or sheet_path not in files:
-            raise OperationalWorkbookError(f"aba mensal ausente: {month}")
-        root = ET.fromstring(files[sheet_path])
-        header_row, _ = _find_header_row(root, shared)
-        styles, row_attrs = _style_template(root, header_row)
-        prepared[month] = (sheet_path, root, header_row, styles, row_attrs)
-        existing_global.update(_existing_links(files, sheet_path, root, shared, header_row))
+        if month not in prepared:
+            raise OperationalWorkbookError(f"aba mensal ausente ou incompatível: {month}")
 
     appended_by_month: dict[str, int] = {}
     duplicate_count = 0
