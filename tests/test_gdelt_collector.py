@@ -24,55 +24,100 @@ def test_build_url() -> None:
     assert query["enddatetime"] == ["20260831235959"]
 
 
-def test_collect_payload_is_compatible_and_deduplicated() -> None:
+def test_collect_payload_is_compatible_deduplicated_and_disambiguated() -> None:
     start = datetime(2026, 8, 1, tzinfo=timezone.utc)
     end = datetime(2026, 8, 31, 23, 59, 59, tzinfo=timezone.utc)
 
     fixture = [
         {
-            "title": "Professor da FECAP comenta cenário econômico",
-            "url": "https://example.com/noticia?utm_source=gdelt",
+            "title": "Recuperação judicial cresce no país",
+            "url": "https://example.com/positiva?utm_source=gdelt",
             "domain": "Example.com",
             "seendate": "20260831T120000Z",
         },
         {
-            "title": "Professor da FECAP comenta cenário econômico",
-            "url": "https://example.com/noticia",
+            "title": "Recuperação judicial cresce no país",
+            "url": "https://example.com/positiva",
             "domain": "example.com",
             "seendate": "20260831T120000Z",
+        },
+        {
+            "title": "Prêmio de educação",
+            "url": "https://example.com/homonimo",
+            "domain": "example.com",
+            "seendate": "20260830T120000Z",
+        },
+        {
+            "title": "Menção sem contexto",
+            "url": "https://example.com/ambigua",
+            "domain": "example.com",
+            "seendate": "20260829T120000Z",
         },
         {
             "title": "",
             "url": "https://example.com/invalida",
             "domain": "example.com",
-            "seendate": "20260830T120000Z",
+            "seendate": "20260828T120000Z",
         },
     ]
+
+    pages = {
+        "https://example.com/positiva": (
+            "O professor Ahmed El Khatib, da FECAP, explicou o cenário de recuperação judicial."
+        ),
+        "https://example.com/homonimo": (
+            "O Colégio de Aplicação do Recife (Fecap/UPE) recebeu prêmio estadual."
+        ),
+        "https://example.com/ambigua": "A sigla FECAP foi citada sem contexto adicional.",
+    }
 
     def fake_fetcher(*args, **kwargs):
         return fixture
 
-    payload = collect_fecap_public(start, end, fetcher=fake_fetcher)
+    def fake_article_fetcher(url: str) -> str:
+        return pages[url]
+
+    payload = collect_fecap_public(
+        start,
+        end,
+        known_people=("Ahmed El Khatib", "Rosely Schwartz"),
+        fetcher=fake_fetcher,
+        article_fetcher=fake_article_fetcher,
+    )
     assert payload["format"] == 1
     assert payload["provider"] == "GDELT DOC 2.0"
     assert payload["credentials_persisted"] is False
     assert payload["raw_response_persisted"] is False
     assert payload["production_enabled"] is False
     assert payload["scheduled"] is False
-    assert payload["source_article_count"] == 3
+    assert payload["source_article_count"] == 5
     assert payload["rejected_article_count"] == 1
-    assert len(payload["items"]) == 1
+    assert len(payload["items"]) == 3
+    assert payload["identity_counts"] == {
+        "confirmed": 1,
+        "homonym": 1,
+        "ambiguous": 1,
+        "fetch_failed": 0,
+    }
 
-    item = payload["items"][0]
-    assert item["url"] == "https://example.com/noticia"
-    assert item["source"] == "example.com"
-    assert item["published_at"] == "2026-08-31T12:00:00Z"
-    assert "FECAP" in item["text"]
+    by_url = {item["url"]: item for item in payload["items"]}
+    positive = by_url["https://example.com/positiva"]
+    assert positive["institution_identity"] == "confirmed"
+    assert "Ahmed El Khatib" in positive["text"]
+    assert "professor" in positive["text"].casefold()
+
+    homonym = by_url["https://example.com/homonimo"]
+    assert homonym["institution_identity"] == "homonym"
+    assert homonym["text"] == ""
+
+    ambiguous = by_url["https://example.com/ambigua"]
+    assert ambiguous["institution_identity"] == "ambiguous"
+    assert ambiguous["text"] == "FECAP"
 
 
 def main() -> int:
     test_build_url()
-    test_collect_payload_is_compatible_and_deduplicated()
+    test_collect_payload_is_compatible_deduplicated_and_disambiguated()
     print("test_gdelt_collector: OK")
     return 0
 
