@@ -71,8 +71,16 @@ def test_collect_payload_is_compatible_deduplicated_and_disambiguated() -> None:
         "https://example.com/ambigua": "A sigla FECAP foi citada sem contexto adicional.",
     }
 
+    seen_queries = []
+
     def fake_fetcher(*args, **kwargs):
-        return fixture
+        query = kwargs["query"]
+        seen_queries.append(query)
+        if query == '"FECAP"':
+            return fixture
+        if query == '"Ahmed El Khatib"':
+            return fixture[:2]
+        return []
 
     def fake_article_fetcher(url: str) -> str:
         return pages[url]
@@ -83,6 +91,7 @@ def test_collect_payload_is_compatible_deduplicated_and_disambiguated() -> None:
         known_people=("Ahmed El Khatib", "Rosely Schwartz"),
         fetcher=fake_fetcher,
         article_fetcher=fake_article_fetcher,
+        sleep=lambda _: None,
     )
     assert payload["format"] == 1
     assert payload["provider"] == "GDELT DOC 2.0"
@@ -90,7 +99,13 @@ def test_collect_payload_is_compatible_deduplicated_and_disambiguated() -> None:
     assert payload["raw_response_persisted"] is False
     assert payload["production_enabled"] is False
     assert payload["scheduled"] is False
-    assert payload["source_article_count"] == 5
+    assert payload["source_article_count"] == 7
+    assert payload["discovery_queries"] == [
+        '"FECAP"',
+        '"Ahmed El Khatib"',
+        '"Rosely Schwartz"',
+    ]
+    assert seen_queries == payload["discovery_queries"]
     assert payload["rejected_article_count"] == 1
     assert len(payload["items"]) == 3
     assert payload["identity_counts"] == {
