@@ -10,6 +10,7 @@ on:
       - src/gdelt_api.py
       - scripts/collect_gdelt_publications.py
       - config/people.json
+      - tests/test_gdelt_collector.py
 
 permissions:
   contents: read
