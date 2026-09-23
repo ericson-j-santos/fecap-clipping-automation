@@ -1,0 +1,52 @@
+name: GDELT Live Fallback
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/gdelt-zero-cost-fallback-20260923
+    paths:
+      - .github/workflows/gdelt-live-fallback.yml
+
+permissions:
+  contents: read
+
+jobs:
+  live-fallback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CORRELATION_ID: gdelt-live-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Coletar FECAP no GDELT
+        run: >
+          python scripts/collect_gdelt_publications.py
+          --once
+          --start-date 2026-08-01
+          --end-date 2026-08-31
+          --output data/private/gdelt-fecap-items.json
+          --evidence evidence/private/gdelt-public-collector-run.json
+      - name: Gerar Excel de 9 colunas
+        run: >
+          python scripts/build_homologation_excel.py
+          --input data/private/gdelt-fecap-items.json
+          --output data/private/gdelt-fallback-homologacao.xlsx
+          --evidence evidence/private/gdelt-fallback-excel.json
+      - name: Publicar evidência pública
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gdelt-live-fallback-${{ github.run_id }}
+          path: |
+            evidence/private/gdelt-public-collector-run.json
+            evidence/private/gdelt-fallback-excel.json
+            data/private/gdelt-fecap-items.json
+            data/private/gdelt-fallback-homologacao.xlsx
+          if-no-files-found: warn
+          retention-days: 7
