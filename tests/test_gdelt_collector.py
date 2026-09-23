@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, urlsplit
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from gdelt_api import build_url, collect_fecap_public
+from gdelt_api import GdeltError, build_url, collect_fecap_public
 
 
 def test_build_url() -> None:
@@ -80,6 +80,8 @@ def test_collect_payload_is_compatible_deduplicated_and_disambiguated() -> None:
             return fixture
         if query == '"Ahmed El Khatib"':
             return fixture[:2]
+        if query == '"Rosely Schwartz"':
+            raise GdeltError("rate limit simulado")
         return []
 
     def fake_article_fetcher(url: str) -> str:
@@ -106,6 +108,13 @@ def test_collect_payload_is_compatible_deduplicated_and_disambiguated() -> None:
         '"Rosely Schwartz"',
     ]
     assert seen_queries == payload["discovery_queries"]
+    assert payload["discovery_errors"] == [
+        {
+            "query": '"Rosely Schwartz"',
+            "error_type": "GdeltError",
+            "optional": True,
+        }
+    ]
     assert payload["rejected_article_count"] == 1
     assert len(payload["items"]) == 3
     assert payload["identity_counts"] == {
