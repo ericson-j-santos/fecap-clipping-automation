@@ -14,6 +14,7 @@ from gdelt_api import GdeltError, collect_fecap_public
 
 DEFAULT_OUTPUT = ROOT / "data" / "private" / "gdelt-fecap-items.json"
 DEFAULT_EVIDENCE = ROOT / "evidence" / "private" / "gdelt-public-collector-run.json"
+DEFAULT_PEOPLE = ROOT / "config" / "people.json"
 
 
 def _parse_day(value: str) -> datetime:
@@ -21,6 +22,13 @@ def _parse_day(value: str) -> datetime:
         return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     except ValueError as exc:
         raise ValueError("data deve usar YYYY-MM-DD") from exc
+
+
+def _load_people(path: Path) -> tuple[str, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or not payload:
+        raise ValueError("people.json deve ser objeto não vazio")
+    return tuple(str(name).strip() for name in payload if str(name).strip())
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -31,6 +39,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--start-date")
     parser.add_argument("--end-date")
     parser.add_argument("--max-records", type=int, default=250)
+    parser.add_argument("--people", type=Path, default=DEFAULT_PEOPLE)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--evidence", type=Path, default=DEFAULT_EVIDENCE)
     parser.add_argument("--check", action="store_true")
@@ -42,7 +51,8 @@ def main() -> int:
     if ns.check:
         print(
             "mode=one_shot provider=gdelt-doc-2.0 credentials_required=false "
-            "max_records=250 scheduled=false production_enabled=false"
+            "article_context=true identity_gate=true max_records=250 "
+            "scheduled=false production_enabled=false"
         )
         return 0
     if not ns.once:
@@ -59,8 +69,14 @@ def main() -> int:
             raise ValueError("data final anterior à inicial")
         if (end.date() - start.date()).days > 92:
             raise ValueError("janela maior que 93 dias não é suportada pelo GDELT DOC 2.0")
-        payload = collect_fecap_public(start, end, max_records=ns.max_records)
-    except (ValueError, GdeltError, OSError) as exc:
+        known_people = _load_people(ns.people)
+        payload = collect_fecap_public(
+            start,
+            end,
+            max_records=ns.max_records,
+            known_people=known_people,
+        )
+    except (ValueError, GdeltError, OSError, json.JSONDecodeError) as exc:
         evidence = {
             "status": "BLOCKED",
             "provider": "GDELT DOC 2.0",
@@ -94,6 +110,7 @@ def main() -> int:
         "item_count": len(payload["items"]),
         "source_article_count": payload["source_article_count"],
         "rejected_article_count": payload["rejected_article_count"],
+        "identity_counts": payload["identity_counts"],
         "output_path": str(ns.output),
         "credentials_persisted": False,
         "raw_response_persisted": False,
