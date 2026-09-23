@@ -7,6 +7,9 @@ on:
       - feat/gdelt-zero-cost-fallback-20260923
     paths:
       - .github/workflows/gdelt-live-fallback.yml
+      - src/gdelt_api.py
+      - scripts/collect_gdelt_publications.py
+      - config/people.json
 
 permissions:
   contents: read
