@@ -89,8 +89,12 @@ jobs:
         run: python scripts/validate_knewin_publications_runtime.py --check
       - name: Validar entrada do coletor autenticado
         run: python scripts/collect_knewin_publications.py --check
+      - name: Validar fallback público GDELT
+        run: python tests/test_gdelt_collector.py
+      - name: Validar entrada do coletor público GDELT
+        run: python scripts/collect_gdelt_publications.py --check
       - name: Validar sintaxe dos scripts interativos
-        run: python -m py_compile scripts/audit_main_governance.py scripts/knewin_session_bootstrap.py scripts/probe_knewin_session.py scripts/probe_knewin_session_auto.py scripts/probe_knewin_news.py scripts/probe_knewin_news_guided.py scripts/analyze_knewin_inventory.py scripts/prepare_knewin_collector.py scripts/validate_knewin_publications_runtime.py scripts/collect_knewin_publications.py scripts/build_homologation_excel.py scripts/append_operational_workbook.py scripts/publish_onedrive_homologation.py scripts/publish_sharepoint_homologation.py scripts/run_homologation_pipeline.py scripts/run_monthly_operational_e2e.py
+        run: python -m py_compile scripts/audit_main_governance.py scripts/knewin_session_bootstrap.py scripts/probe_knewin_session.py scripts/probe_knewin_session_auto.py scripts/probe_knewin_news.py scripts/probe_knewin_news_guided.py scripts/analyze_knewin_inventory.py scripts/prepare_knewin_collector.py scripts/validate_knewin_publications_runtime.py scripts/collect_knewin_publications.py scripts/collect_gdelt_publications.py scripts/build_homologation_excel.py scripts/append_operational_workbook.py scripts/publish_onedrive_homologation.py scripts/publish_sharepoint_homologation.py scripts/run_homologation_pipeline.py scripts/run_monthly_operational_e2e.py
       - name: Gerar pacote portátil
         run: python scripts/build_portable.py
       - name: Publicar pacote portátil
