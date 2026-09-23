@@ -7,6 +7,7 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 - idempotência SHA-256: implementada;
 - fila de revisão: implementada;
 - E2E com notícias públicas reais + SQLite de homologação: aprovado;
+- fallback zero-custo GDELT DOC 2.0: implementado para janela explícita, sem chave e com saída compatível com o mesmo Excel; itens sem contexto suficiente permanecem em `Revisao`;
 - sonda de sessão e inventário sanitizado de endpoints JSON: implementados;
 - templates de rota com identificadores mascarados: implementados;
 - jornada guiada e ranking de endpoints candidatos: implementados;
@@ -46,6 +47,11 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
    `python scripts/collect_knewin_publications.py --once --start-date 2026-08-01 --end-date 2026-08-31`
 
    O coletor reutiliza a requisição autenticada em memória, pagina `/restful/search/publications` até o `count` informado e só então aplica a janela inclusiva por `publishedDate`. Credenciais, headers e corpo bruto da API não são persistidos.
+
+   Se a autenticação Knewin estiver indisponível, use o fallback público sem chave:
+   `python scripts/collect_gdelt_publications.py --once --start-date 2026-08-01 --end-date 2026-08-31`
+
+   O fallback consulta o GDELT DOC 2.0 em modo Article List, limita a janela a até 93 dias, deduplica por URL canônica e grava `data/private/gdelt-fecap-items.json` no mesmo contrato `format=1`. Como o índice não fornece o texto integral no resultado de lista, a classificação continua fail-closed: ausência de evidência editorial suficiente vai para `Revisao`, nunca para inclusão inventada.
 10. Gere o Excel local de homologação a partir da saída privada do coletor:
     `python scripts/build_homologation_excel.py`
 11. Para validar sem gravar o workbook:
