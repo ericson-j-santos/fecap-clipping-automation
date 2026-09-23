@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
+      - main
       - feat/gdelt-zero-cost-fallback-20260923
     paths:
       - .github/workflows/gdelt-live-fallback.yml
