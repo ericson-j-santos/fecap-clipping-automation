@@ -256,8 +256,26 @@ def collect_fecap_public(
     known_people: tuple[str, ...] = (),
     fetcher: Callable[..., list[dict]] = fetch_articles,
     article_fetcher: Callable[[str], str] = fetch_article_text,
+    sleep: Callable[[float], None] = time.sleep,
+    query_pause_seconds: float = 2.1,
 ) -> dict:
-    articles = fetcher(start, end, query=query, max_records=max_records)
+    discovery_queries = [query]
+    discovery_queries.extend(
+        f'"{name}"' for name in known_people if name.strip()
+    )
+    articles: list[dict] = []
+    for index, discovery_query in enumerate(discovery_queries):
+        if index and query_pause_seconds > 0:
+            sleep(query_pause_seconds)
+        articles.extend(
+            fetcher(
+                start,
+                end,
+                query=discovery_query,
+                max_records=max_records,
+            )
+        )
+
     items: list[dict] = []
     seen: set[str] = set()
     rejected = 0
@@ -305,6 +323,7 @@ def collect_fecap_public(
         "format": 1,
         "provider": "GDELT DOC 2.0",
         "query": query,
+        "discovery_queries": discovery_queries,
         "window": {
             "start": start.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
             "end": end.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
