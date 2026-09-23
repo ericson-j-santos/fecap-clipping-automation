@@ -18,6 +18,7 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 - Excel local de homologação com contrato de 9 colunas observado no vídeo: implementado e determinístico;
 - enriquecimento de TIER/MÍDIA/ORIGEM/ASSUNTO/FONTE/UN. NEG.: fail-closed por regras versionadas; itens sem evidência vão para revisão;
 - append no workbook operacional existente: implementado em OOXML, com validação do cabeçalho de 9 colunas e deduplicação global por URL canônica;
+- harness E2E mensal operacional: implementado para coleta por período, append em cópia controlada, releitura por SHA-256 e replay byte a byte sem duplicação; a evidência só marca Knewin real quando a coleta não é pulada;
 - publicação SharePoint: destino adicional, fora do caminho crítico; site/biblioteca/pasta e workbook canônico validados, com replay sem duplicação (`docs/sharepoint-corporate-discovery.md`);
 - governança da branch `main`: sem proteção efetiva; ruleset alvo especificado em `docs/governance-main-branch.md`.
 
@@ -51,6 +52,10 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
     `python scripts/build_homologation_excel.py --dry-run`
 12. Quando o `Clipping_2026.xlsx` operacional estiver inequivocamente identificado, valide primeiro em uma cópia:
     `python scripts/append_operational_workbook.py --once --workbook Clipping_2026.xlsx --collector data/private/knewin-fecap-items.json --output Clipping_2026.validado.xlsx`
+13. Para fechar o E2E mensal com caso positivo e replay, use o harness one-shot em uma cópia:
+    `python scripts/run_monthly_operational_e2e.py --once --start-date 2026-08-01 --end-date 2026-08-31 --workbook Clipping_2026.xlsx --output Clipping_2026.validado.xlsx --allow-human-login`
+
+   A execução grava um `correlation_id`, exige por padrão pelo menos uma nova linha, relê o workbook persistido por SHA-256 e repete a mesma entrada. O replay só passa se não anexar linha adicional e se os bytes permanecerem idênticos. `--skip-collect` existe para teste determinístico com entrada pré-coletada e registra explicitamente `live_knewin_validated=false`.
 
 O contrato do Excel está em `docs/excel-homologation-contract.md`. Para o fluxo-alvo do vídeo, a ordem é `DATA | VEÍCULO | TIER | MÍDIA | ORIGEM | ASSUNTO | FONTE | UN. NEG. | LINK`. As regras ficam em `config/video_enrichment.json`; com `require_complete=true`, qualquer item sem enriquecimento comprovado vai para `Revisao` em vez de receber valor inventado.
 

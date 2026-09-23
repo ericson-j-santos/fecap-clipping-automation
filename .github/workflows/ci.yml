@@ -51,6 +51,10 @@ jobs:
         run: python tests/test_operational_workbook.py
       - name: Validar entrada do atualizador do workbook operacional
         run: python scripts/append_operational_workbook.py --check
+      - name: Validar E2E mensal operacional e replay
+        run: python tests/test_monthly_operational_e2e.py
+      - name: Validar entrada do E2E mensal operacional
+        run: python scripts/run_monthly_operational_e2e.py --check
       - name: Validar contrato OneDrive one-shot
         run: python tests/test_onedrive_homologation.py
       - name: Validar entrada do publicador OneDrive
@@ -86,7 +90,7 @@ jobs:
       - name: Validar entrada do coletor autenticado
         run: python scripts/collect_knewin_publications.py --check
       - name: Validar sintaxe dos scripts interativos
-        run: python -m py_compile scripts/audit_main_governance.py scripts/knewin_session_bootstrap.py scripts/probe_knewin_session.py scripts/probe_knewin_session_auto.py scripts/probe_knewin_news.py scripts/probe_knewin_news_guided.py scripts/analyze_knewin_inventory.py scripts/prepare_knewin_collector.py scripts/validate_knewin_publications_runtime.py scripts/collect_knewin_publications.py scripts/build_homologation_excel.py scripts/append_operational_workbook.py scripts/publish_onedrive_homologation.py scripts/publish_sharepoint_homologation.py scripts/run_homologation_pipeline.py
+        run: python -m py_compile scripts/audit_main_governance.py scripts/knewin_session_bootstrap.py scripts/probe_knewin_session.py scripts/probe_knewin_session_auto.py scripts/probe_knewin_news.py scripts/probe_knewin_news_guided.py scripts/analyze_knewin_inventory.py scripts/prepare_knewin_collector.py scripts/validate_knewin_publications_runtime.py scripts/collect_knewin_publications.py scripts/build_homologation_excel.py scripts/append_operational_workbook.py scripts/publish_onedrive_homologation.py scripts/publish_sharepoint_homologation.py scripts/run_homologation_pipeline.py scripts/run_monthly_operational_e2e.py
       - name: Gerar pacote portátil
         run: python scripts/build_portable.py
       - name: Publicar pacote portátil
