@@ -51,7 +51,7 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
    Se a autenticação Knewin estiver indisponível, use o fallback público sem chave:
    `python scripts/collect_gdelt_publications.py --once --start-date 2026-08-01 --end-date 2026-08-31`
 
-   O fallback consulta o GDELT DOC 2.0 em modo Article List, limita a janela a até 93 dias, deduplica por URL canônica e grava `data/private/gdelt-fecap-items.json` no mesmo contrato `format=1`. Como o índice não fornece o texto integral no resultado de lista, a classificação continua fail-closed: ausência de evidência editorial suficiente vai para `Revisao`, nunca para inclusão inventada.
+   O fallback consulta o GDELT DOC 2.0 em modo Article List, limita a janela a até 93 dias, deduplica por URL canônica e grava `data/private/gdelt-fecap-items.json` no mesmo contrato `format=1`. Para desambiguar homônimos da sigla, lê no máximo um trecho sanitizado da página pública e confirma a instituição somente por nome institucional conhecido ou porta-voz versionado em `config/people.json`. Homônimos comprovados são excluídos; página inacessível ou identidade incerta vai para `Revisao`. A resposta HTML bruta nunca é persistida.
 10. Gere o Excel local de homologação a partir da saída privada do coletor:
     `python scripts/build_homologation_excel.py`
 11. Para validar sem gravar o workbook:
