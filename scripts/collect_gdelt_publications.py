@@ -111,6 +111,7 @@ def main() -> int:
         "source_article_count": payload["source_article_count"],
         "rejected_article_count": payload["rejected_article_count"],
         "identity_counts": payload["identity_counts"],
+        "discovery_error_count": len(payload["discovery_errors"]),
         "output_path": str(ns.output),
         "credentials_persisted": False,
         "raw_response_persisted": False,
