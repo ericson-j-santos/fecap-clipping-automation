@@ -13,6 +13,9 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from gdelt_api import GdeltError, build_url, collect_fecap_public
 
+sys.path.insert(0, str(ROOT / "scripts"))
+from collect_gdelt_publications import _safe_error_code
+
 SCRIPT = ROOT / "scripts" / "collect_gdelt_publications.py"
 
 
@@ -144,6 +147,13 @@ def test_collect_payload_is_compatible_deduplicated_and_disambiguated() -> None:
     assert ambiguous["text"] == "FECAP"
 
 
+def test_safe_gdelt_error_codes_do_not_echo_raw_details() -> None:
+    assert _safe_error_code(GdeltError("GDELT respondeu HTTP 429")) == "gdelt_http_429"
+    assert _safe_error_code(GdeltError("GDELT respondeu HTTP 503")) == "gdelt_http_503"
+    assert _safe_error_code(GdeltError("falha de conexão com GDELT")) == "gdelt_connection"
+    assert _safe_error_code(GdeltError("detalhe não permitido")) == "gdelt_error"
+
+
 def test_invalid_external_correlation_fails_closed_without_echo() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
         evidence = Path(temp_dir) / "evidence.json"
@@ -171,12 +181,15 @@ def test_invalid_external_correlation_fails_closed_without_echo() -> None:
         payload = json.loads(evidence.read_text(encoding="utf-8"))
         assert payload["status"] == "BLOCKED"
         assert payload["error_type"] == "ValueError"
+        assert payload["error_code"] == "input_validation"
+        assert completed.stderr.strip() == "BLOCKED: input_validation"
         assert secret_like_value not in completed.stderr
 
 
 def main() -> int:
     test_build_url()
     test_collect_payload_is_compatible_deduplicated_and_disambiguated()
+    test_safe_gdelt_error_codes_do_not_echo_raw_details()
     test_invalid_external_correlation_fails_closed_without_echo()
     print("test_gdelt_collector: OK")
     return 0
