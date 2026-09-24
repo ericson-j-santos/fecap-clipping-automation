@@ -43,11 +43,12 @@ jobs:
       TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Checkout do SHA evidenciado
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.TARGET_SHA }}
+          persist-credentials: false
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Coletar FECAP no GDELT
@@ -57,6 +58,7 @@ jobs:
           --start-date 2026-08-01
           --end-date 2026-08-31
           --correlation-id "$CORRELATION_ID"
+          --primary-query-only
           --output data/private/gdelt-fecap-items.json
           --evidence evidence/private/gdelt-public-collector-run.json
       - name: Gerar Excel de 9 colunas
@@ -77,7 +79,7 @@ jobs:
           --run-id "$GITHUB_RUN_ID"
       - name: Publicar evidência pública
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: gdelt-live-fallback-${{ github.run_id }}
           path: |
