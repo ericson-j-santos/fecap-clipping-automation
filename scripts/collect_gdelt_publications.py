@@ -105,7 +105,7 @@ def main() -> int:
             json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
-        print(f"BLOCKED: {type(exc).__name__}: {exc}", file=sys.stderr)
+        print(f"BLOCKED: {type(exc).__name__}", file=sys.stderr)
         return 50
 
     payload["correlation_id"] = correlation_id
