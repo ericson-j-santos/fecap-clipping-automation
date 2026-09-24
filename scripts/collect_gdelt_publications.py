@@ -41,6 +41,28 @@ def _resolve_correlation_id(value: str | None) -> str:
     return text
 
 
+def _safe_error_code(exc: Exception) -> str:
+    if isinstance(exc, json.JSONDecodeError):
+        return "json_decode"
+    if isinstance(exc, GdeltError):
+        message = str(exc)
+        http_match = re.fullmatch(r"GDELT respondeu HTTP ([0-9]{3})", message)
+        if http_match:
+            return f"gdelt_http_{http_match.group(1)}"
+        return {
+            "GDELT retornou JSON fora do formato esperado": "gdelt_json_shape",
+            "GDELT retornou JSON inválido": "gdelt_json_invalid",
+            "falha de conexão com GDELT": "gdelt_connection",
+            "falha ao consultar GDELT": "gdelt_request_failed",
+            "campo articles possui formato inesperado": "gdelt_articles_shape",
+        }.get(message, "gdelt_error")
+    if isinstance(exc, ValueError):
+        return "input_validation"
+    if isinstance(exc, OSError):
+        return "filesystem_error"
+    return "unexpected_error"
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Coleta clipping FECAP via GDELT DOC 2.0 sem chave de API"
@@ -90,10 +112,12 @@ def main() -> int:
             known_people=known_people,
         )
     except (ValueError, GdeltError, OSError, json.JSONDecodeError) as exc:
+        error_code = _safe_error_code(exc)
         evidence = {
             "status": "BLOCKED",
             "provider": "GDELT DOC 2.0",
             "error_type": type(exc).__name__,
+            "error_code": error_code,
             "correlation_id": correlation_id,
             "credentials_persisted": False,
             "raw_response_persisted": False,
@@ -105,7 +129,7 @@ def main() -> int:
             json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
-        print(f"BLOCKED: {type(exc).__name__}", file=sys.stderr)
+        print(f"BLOCKED: {error_code}", file=sys.stderr)
         return 50
 
     payload["correlation_id"] = correlation_id
