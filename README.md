@@ -8,6 +8,7 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 - fila de revisão: implementada;
 - E2E com notícias públicas reais + SQLite de homologação: aprovado;
 - fallback zero-custo GDELT DOC 2.0: implementado para janela explícita, sem chave e com saída compatível com o mesmo Excel; itens sem contexto suficiente permanecem em `Revisao`;
+- evidência live GDELT: vínculo fail-closed entre Git SHA/run, `correlation_id`, SHA-256 do coletor e do workbook, reconstrução determinística e controle negativo;
 - sonda de sessão e inventário sanitizado de endpoints JSON: implementados;
 - templates de rota com identificadores mascarados: implementados;
 - jornada guiada e ranking de endpoints candidatos: implementados;
@@ -50,6 +51,8 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 
    Se a autenticação Knewin estiver indisponível, use o fallback público sem chave:
    `python scripts/collect_gdelt_publications.py --once --start-date 2026-08-01 --end-date 2026-08-31`
+
+   Em CI, o workflow fornece um `correlation_id` derivado do run e valida o manifesto final com `scripts/validate_gdelt_live_e2e.py`; valores externos de correlação são aceitos somente quando seguem o formato restrito do coletor.
 
    O fallback consulta o GDELT DOC 2.0 em modo Article List, limita a janela a até 93 dias, deduplica por URL canônica e grava `data/private/gdelt-fecap-items.json` no mesmo contrato `format=1`. Para desambiguar homônimos da sigla, lê no máximo um trecho sanitizado da página pública e confirma a instituição somente por nome institucional conhecido ou porta-voz versionado em `config/people.json`. Homônimos comprovados são excluídos; página inacessível ou identidade incerta vai para `Revisao`. A resposta HTML bruta nunca é persistida.
 10. Gere o Excel local de homologação a partir da saída privada do coletor:
@@ -117,3 +120,4 @@ O ZIP contém `PORTABLE-MANIFEST.json` com tamanho e SHA-256 de cada arquivo e e
 ## Evidência
 - pública/determinística: `evidence/e2e-public-real-news.json`
 - privada Knewin/Excel: `evidence/private/` (não versionada)
+- GDELT live auditada: `evidence/private/gdelt-live-e2e.json` (artefato efêmero do workflow, não versionado)
