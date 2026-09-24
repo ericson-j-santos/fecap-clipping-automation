@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 from pathlib import Path
+import subprocess
 import sys
+import tempfile
 from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from gdelt_api import GdeltError, build_url, collect_fecap_public
+
+SCRIPT = ROOT / "scripts" / "collect_gdelt_publications.py"
 
 
 def test_build_url() -> None:
@@ -139,9 +144,40 @@ def test_collect_payload_is_compatible_deduplicated_and_disambiguated() -> None:
     assert ambiguous["text"] == "FECAP"
 
 
+def test_invalid_external_correlation_fails_closed_without_echo() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        evidence = Path(temp_dir) / "evidence.json"
+        secret_like_value = "invalid correlation value"
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--once",
+                "--start-date",
+                "2026-08-01",
+                "--end-date",
+                "2026-08-31",
+                "--correlation-id",
+                secret_like_value,
+                "--evidence",
+                str(evidence),
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert completed.returncode == 50
+        payload = json.loads(evidence.read_text(encoding="utf-8"))
+        assert payload["status"] == "BLOCKED"
+        assert payload["error_type"] == "ValueError"
+        assert secret_like_value not in completed.stderr
+
+
 def main() -> int:
     test_build_url()
     test_collect_payload_is_compatible_deduplicated_and_disambiguated()
+    test_invalid_external_correlation_fails_closed_without_echo()
     print("test_gdelt_collector: OK")
     return 0
 
