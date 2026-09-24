@@ -40,6 +40,7 @@ jobs:
     timeout-minutes: 10
     env:
       CORRELATION_ID: gdelt-live-${{ github.run_id }}-${{ github.run_attempt }}
+      TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -70,7 +71,7 @@ jobs:
           --workbook data/private/gdelt-fallback-homologacao.xlsx
           --excel-evidence evidence/private/gdelt-fallback-excel.json
           --evidence evidence/private/gdelt-live-e2e.json
-          --git-sha "$GITHUB_SHA"
+          --git-sha "$TARGET_SHA"
           --run-id "$GITHUB_RUN_ID"
       - name: Publicar evidência pública
         if: always()
