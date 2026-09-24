@@ -19,6 +19,8 @@ DEFAULT_QUERY = '"FECAP"'
 MAX_RECORDS = 250
 MAX_PAGE_BYTES = 1_500_000
 MAX_CONTEXT_CHARS = 2400
+MAX_RETRY_DELAY_SECONDS = 60.0
+RATE_LIMIT_BASE_DELAY_SECONDS = 20.0
 
 INSTITUTION_MARKERS = (
     "fundacao escola de comercio alvares penteado",
@@ -93,6 +95,22 @@ def build_url(
     return API_URL + "?" + urlencode(params)
 
 
+def _retry_delay_seconds(exc: HTTPError, attempt: int) -> float:
+    if exc.code != 429:
+        return float(2 ** (attempt - 1))
+    retry_after = None
+    if exc.headers is not None:
+        retry_after = exc.headers.get("Retry-After")
+    if retry_after is not None:
+        value = str(retry_after).strip()
+        if re.fullmatch(r"[0-9]+", value):
+            return min(max(float(value), 1.0), MAX_RETRY_DELAY_SECONDS)
+    return min(
+        RATE_LIMIT_BASE_DELAY_SECONDS * (2 ** (attempt - 1)),
+        MAX_RETRY_DELAY_SECONDS,
+    )
+
+
 def _load_json(
     url: str,
     *,
@@ -124,6 +142,8 @@ def _load_json(
             retryable = exc.code == 429 or 500 <= exc.code <= 599
             if not retryable or attempt == attempts:
                 raise GdeltError(f"GDELT respondeu HTTP {exc.code}") from exc
+            sleep(_retry_delay_seconds(exc, attempt))
+            continue
         except (URLError, TimeoutError) as exc:
             last_error = exc
             if attempt == attempts:
@@ -258,11 +278,13 @@ def collect_fecap_public(
     article_fetcher: Callable[[str], str] = fetch_article_text,
     sleep: Callable[[float], None] = time.sleep,
     query_pause_seconds: float = 5.0,
+    discover_people: bool = True,
 ) -> dict:
     discovery_queries = [query]
-    discovery_queries.extend(
-        f'"{name}"' for name in known_people if name.strip()
-    )
+    if discover_people:
+        discovery_queries.extend(
+            f'"{name}"' for name in known_people if name.strip()
+        )
     articles: list[dict] = []
     discovery_errors: list[dict] = []
     for index, discovery_query in enumerate(discovery_queries):
@@ -337,6 +359,7 @@ def collect_fecap_public(
         "query": query,
         "discovery_queries": discovery_queries,
         "discovery_errors": discovery_errors,
+        "people_discovery_enabled": discover_people,
         "window": {
             "start": start.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
             "end": end.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),

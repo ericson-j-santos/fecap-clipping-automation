@@ -2,19 +2,37 @@ name: GDELT Live Fallback
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - feat/gdelt-zero-cost-fallback-20260923
+  pull_request:
     paths:
       - .github/workflows/gdelt-live-fallback.yml
       - src/gdelt_api.py
       - scripts/collect_gdelt_publications.py
+      - scripts/build_homologation_excel.py
+      - scripts/validate_gdelt_live_e2e.py
       - config/people.json
+      - config/video_enrichment.json
       - tests/test_gdelt_collector.py
+      - tests/test_gdelt_live_e2e.py
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/gdelt-live-fallback.yml
+      - src/gdelt_api.py
+      - scripts/collect_gdelt_publications.py
+      - scripts/build_homologation_excel.py
+      - scripts/validate_gdelt_live_e2e.py
+      - config/people.json
+      - config/video_enrichment.json
+      - tests/test_gdelt_collector.py
+      - tests/test_gdelt_live_e2e.py
 
 permissions:
   contents: read
+
+concurrency:
+  group: gdelt-live-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   live-fallback:
@@ -22,11 +40,15 @@ jobs:
     timeout-minutes: 10
     env:
       CORRELATION_ID: gdelt-live-${{ github.run_id }}-${{ github.run_attempt }}
+      TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout do SHA evidenciado
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          persist-credentials: false
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Coletar FECAP no GDELT
@@ -35,6 +57,8 @@ jobs:
           --once
           --start-date 2026-08-01
           --end-date 2026-08-31
+          --correlation-id "$CORRELATION_ID"
+          --primary-query-only
           --output data/private/gdelt-fecap-items.json
           --evidence evidence/private/gdelt-public-collector-run.json
       - name: Gerar Excel de 9 colunas
@@ -43,14 +67,25 @@ jobs:
           --input data/private/gdelt-fecap-items.json
           --output data/private/gdelt-fallback-homologacao.xlsx
           --evidence evidence/private/gdelt-fallback-excel.json
+      - name: Validar evidência gold ponta a ponta
+        run: >
+          python scripts/validate_gdelt_live_e2e.py
+          --collector data/private/gdelt-fecap-items.json
+          --collector-evidence evidence/private/gdelt-public-collector-run.json
+          --workbook data/private/gdelt-fallback-homologacao.xlsx
+          --excel-evidence evidence/private/gdelt-fallback-excel.json
+          --evidence evidence/private/gdelt-live-e2e.json
+          --git-sha "$TARGET_SHA"
+          --run-id "$GITHUB_RUN_ID"
       - name: Publicar evidência pública
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: gdelt-live-fallback-${{ github.run_id }}
           path: |
             evidence/private/gdelt-public-collector-run.json
             evidence/private/gdelt-fallback-excel.json
+            evidence/private/gdelt-live-e2e.json
             data/private/gdelt-fecap-items.json
             data/private/gdelt-fallback-homologacao.xlsx
           if-no-files-found: warn
