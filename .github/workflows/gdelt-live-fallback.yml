@@ -42,8 +42,10 @@ jobs:
       CORRELATION_ID: gdelt-live-${{ github.run_id }}-${{ github.run_attempt }}
       TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - name: Checkout
+      - name: Checkout do SHA evidenciado
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
