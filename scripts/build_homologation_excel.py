@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from hashlib import sha256
 import json
 from pathlib import Path
 import sys
@@ -59,6 +60,7 @@ def main() -> int:
         people = _load_object(ns.people)
         tiers = _load_object(ns.tiers) if ns.tiers else {}
         enrichment = _load_object(ns.enrichment)
+        input_payload = ns.input.read_bytes()
         workbook, evidence = build_workbook_bytes(
             collector, people, tiers, enrichment_rules=enrichment
         )
@@ -68,6 +70,9 @@ def main() -> int:
 
     evidence["dry_run"] = bool(ns.dry_run)
     evidence["external_destination_enabled"] = False
+    evidence["source_payload_sha256"] = sha256(input_payload).hexdigest()
+    evidence["source_correlation_id"] = collector.get("correlation_id")
+    evidence["source_provider"] = collector.get("provider")
     if ns.dry_run:
         evidence["output_path"] = None
     else:
