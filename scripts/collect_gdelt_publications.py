@@ -72,6 +72,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--end-date")
     parser.add_argument("--max-records", type=int, default=250)
     parser.add_argument("--correlation-id")
+    parser.add_argument("--primary-query-only", action="store_true")
     parser.add_argument("--people", type=Path, default=DEFAULT_PEOPLE)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--evidence", type=Path, default=DEFAULT_EVIDENCE)
@@ -85,7 +86,8 @@ def main() -> int:
         print(
             "mode=one_shot provider=gdelt-doc-2.0 credentials_required=false "
             "article_context=true identity_gate=true max_records=250 "
-            "external_correlation_supported=true scheduled=false production_enabled=false"
+            "external_correlation_supported=true primary_query_only_supported=true "
+            "scheduled=false production_enabled=false"
         )
         return 0
     if not ns.once:
@@ -110,6 +112,7 @@ def main() -> int:
             end,
             max_records=ns.max_records,
             known_people=known_people,
+            discover_people=not ns.primary_query_only,
         )
     except (ValueError, GdeltError, OSError, json.JSONDecodeError) as exc:
         error_code = _safe_error_code(exc)
@@ -148,6 +151,7 @@ def main() -> int:
         "rejected_article_count": payload["rejected_article_count"],
         "identity_counts": payload["identity_counts"],
         "discovery_error_count": len(payload["discovery_errors"]),
+        "people_discovery_enabled": payload["people_discovery_enabled"],
         "output_path": str(ns.output),
         "credentials_persisted": False,
         "raw_response_persisted": False,
