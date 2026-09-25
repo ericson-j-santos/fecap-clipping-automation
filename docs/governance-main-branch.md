@@ -48,8 +48,23 @@ entrar como check obrigatório.
 
 ## Executor
 
-Alteração de ruleset exige permissão administrativa no repositório e não é coberta pelas
-ferramentas disponíveis à sessão automatizada. É **ação humana** no painel do GitHub.
+Alteração de ruleset exige permissão administrativa e autorização específica. A execução não faz
+parte do CI normal e não pode ser disparada por parâmetros livres.
+
+O repositório possui um runner governado e fixo para esta única operação:
+
+- `scripts/configure_fecap_main_protection_risk3.py`: cadastra temporariamente a ação
+  `fecap.main-protection.dev` no Owner Risk3 Gateway local;
+- `scripts/run_fecap_main_protection_local.py`: opera somente
+  `ericson-j-santos/fecap-clipping-automation@main`, ruleset `main-protection` e check `tests`;
+- host permitido: `Noteri`;
+- SHA alvo atual: `ad154563e9843ce88810e7826f6547f4da889775`;
+- source SHA validado do PR #60: `9d3d6afbd0f147057a21a7c93927b34ec2a7aa48`;
+- o runner falha fechado se SHA, ancestralidade, check, ruleset ou host divergirem;
+- após a escrita, relê branch e ruleset e exige `protected=true` sem alterar o SHA da branch.
+
+O CI valida somente o contrato do runner. A mutação administrativa continua fora do CI e a issue
+só pode ser concluída após o E2E administrativo, incluindo o controle negativo de push direto.
 
 ## Critério de conclusão
 
