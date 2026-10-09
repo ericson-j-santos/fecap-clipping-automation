@@ -30,9 +30,16 @@ class Decision:
 
 
 def canonical_url(url: str) -> str:
-    parts = urlsplit(url)
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        # Parser diagnostics can contain the raw authority, including userinfo.
+        raise ValueError("url inválida") from None
     if parts.scheme not in {"http", "https"} or not parts.netloc:
         raise ValueError("url inválida")
+    if parts.username is not None or parts.password is not None:
+        # Reject instead of stripping credentials and changing resource identity.
+        raise ValueError("url com credenciais não permitida")
     query = [
         (key, value)
         for key, value in parse_qsl(parts.query, keep_blank_values=True)
