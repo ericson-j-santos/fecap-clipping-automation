@@ -20,6 +20,8 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+      - name: Validar privacidade de URLs e persistência SQLite
+        run: python tests/test_clipping_url_security.py
       - name: Validar ambiente portátil
         run: python scripts/local_doctor.py
       - name: Validar auditoria de governança da main
