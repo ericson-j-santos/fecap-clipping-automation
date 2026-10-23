@@ -5,6 +5,8 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import zipfile
+from xml.etree import ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -144,6 +146,15 @@ def test_monthly_operational_replay_with_precollected_fixture() -> None:
         assert evidence["replay_no_op"] is True
         assert evidence["replay_duplicate_count"] >= 1
         assert output.read_bytes() == replay.read_bytes()
+        # Inspeção física independente: ambos os XLSX devem permanecer íntegros
+        # e a entrada original não pode ser modificada pelo append/replay.
+        assert source.read_bytes() == base_workbook
+        with zipfile.ZipFile(output) as archive:
+            assert archive.testzip() is None
+            for filename in archive.namelist():
+                if filename.endswith((".xml", ".rels")):
+                    ET.fromstring(archive.read(filename))
+
 
 
 def test_invalid_window_fails_closed() -> None:
@@ -170,3 +181,23 @@ def test_invalid_window_fails_closed() -> None:
         assert completed.returncode == 50
         payload = json.loads(evidence.read_text(encoding="utf-8"))
         assert payload["phase"] == "date_window"
+
+def main() -> int:
+    # O CI chama este arquivo diretamente; coletar e executar cada teste
+    # evita o falso positivo de um script que só define funções test_*.
+    tests = sorted(
+        (name, func)
+        for name, func in globals().items()
+        if name.startswith("test_") and callable(func)
+    )
+    if len(tests) < 4:
+        raise AssertionError("cobertura de testes menor que a versão de referência")
+    for name, test in tests:
+        test()
+        print(f"{name}: PASS")
+    print(f"test_monthly_operational_e2e: PASS (executed={len(tests)})")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

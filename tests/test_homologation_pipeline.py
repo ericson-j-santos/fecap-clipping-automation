@@ -88,3 +88,23 @@ def test_extract_excel_counts_fails_closed() -> None:
             pass
         else:
             raise AssertionError(f"deveria bloquear contagens inválidas: {evidence}")
+
+def main() -> int:
+    # O CI chama este arquivo diretamente; coletar e executar cada teste
+    # evita o falso positivo de um script que só define funções test_*.
+    tests = sorted(
+        (name, func)
+        for name, func in globals().items()
+        if name.startswith("test_") and callable(func)
+    )
+    if len(tests) < 5:
+        raise AssertionError("cobertura de testes menor que a versão de referência")
+    for name, test in tests:
+        test()
+        print(f"{name}: PASS")
+    print(f"test_homologation_pipeline: PASS (executed={len(tests)})")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
