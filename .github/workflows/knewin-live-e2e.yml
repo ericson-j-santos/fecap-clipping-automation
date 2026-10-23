@@ -1,49 +1,63 @@
 name: Knewin Live E2E
 
+# Explicit operator action only. Never run live collection on PRs, pushes or cron.
 on:
   workflow_dispatch:
     inputs:
       start:
-        description: Início UTC
+        description: Início UTC do mês
         required: true
         default: '2026-08-01T00:00:00Z'
       end:
-        description: Fim UTC
+        description: Fim UTC do mês
         required: true
         default: '2026-08-31T23:59:59Z'
 
 permissions:
   contents: read
 
+concurrency:
+  group: fecap-knewin-live-e2e
+  cancel-in-progress: false
+
 jobs:
   live-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Administrators must restrict this environment to protected main and
+    # approved reviewers. Its secrets are NOT repository-wide secrets.
+    environment: knewin-live-e2e
     env:
       KNEWIN_API_KEY: ${{ secrets.KNEWIN_API_KEY }}
+      KNEWIN_GRAPH_TENANT_ID: ${{ secrets.KNEWIN_GRAPH_TENANT_ID }}
+      KNEWIN_GRAPH_CLIENT_ID: ${{ secrets.KNEWIN_GRAPH_CLIENT_ID }}
+      KNEWIN_GRAPH_CLIENT_SECRET: ${{ secrets.KNEWIN_GRAPH_CLIENT_SECRET }}
+      KNEWIN_GRAPH_DRIVE_ID: ${{ secrets.KNEWIN_GRAPH_DRIVE_ID }}
+      KNEWIN_GRAPH_ITEM_ID: ${{ secrets.KNEWIN_GRAPH_ITEM_ID }}
+      KNEWIN_GRAPH_DOWNLOAD_HOST: ${{ secrets.KNEWIN_GRAPH_DOWNLOAD_HOST }}
+      KNEWIN_APPROVED_WORKBOOK_SHA256: ${{ secrets.KNEWIN_APPROVED_WORKBOOK_SHA256 }}
       KNEWIN_START: ${{ inputs.start }}
       KNEWIN_END: ${{ inputs.end }}
       CORRELATION_ID: knewin-gha-${{ github.run_id }}-${{ github.run_attempt }}
+      RUNNER_TEMP: ${{ runner.temp }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Checkout do SHA do dispatch
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Python 3.12 sem Docker
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - name: Validar pré-condição de autenticação
-        run: |
-          if [ -z "$KNEWIN_API_KEY" ]; then
-            echo 'E2E_BLOCKED: configure o secret KNEWIN_API_KEY no repositório.' >&2
-            exit 20
-          fi
-      - name: Executar E2E real Knewin
+      - name: Gate autenticado e materialização de cópia aprovada
+        run: python scripts/knewin_live_workbook.py prepare
+      - name: Coletar Knewin live e validar append + replay
         run: python scripts/e2e_live_knewin.py
-      - name: Publicar evidência privada da execução
+      - name: Releitura física independente do workbook e recibo
+        run: python scripts/knewin_live_workbook.py verify
+      - name: Eliminar dados temporários privados
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: knewin-live-e2e-${{ github.run_id }}
-          path: evidence/private/e2e-live-summary.json
-          if-no-files-found: warn
-          retention-days: 14
+        run: python scripts/knewin_live_workbook.py cleanup
+
+# Não publicar XLSX, JSON privado, coletor, URLs, tokens ou artefatos desta execução.
+# Apenas status não sensível e identificador da execução permanecem nos logs.
