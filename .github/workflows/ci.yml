@@ -108,6 +108,9 @@ jobs:
       - name: Gerar pacote portátil
         run: python scripts/build_portable.py
       - name: Publicar pacote portátil
+        # Artifact storage is metered; PRs validate package contents but never upload.
+        # Preserve the downloadable portable package on main pushes.
+        if: github.event_name == 'push'
         uses: actions/upload-artifact@v6
         with:
           name: fecap-clipping-portable
