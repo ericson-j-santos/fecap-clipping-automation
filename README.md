@@ -23,7 +23,7 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 - harness E2E mensal operacional: implementado para coleta por período, append em cópia controlada, releitura por SHA-256 e replay byte a byte sem duplicação; a evidência só marca Knewin real quando a coleta não é pulada;
 - adaptador live da API Knewin: valida a coleta real contra uma cópia explícita do workbook operacional de 9 colunas, preserva TIER observado, exige append positivo e replay byte-idêntico e nunca usa o antigo SQLite como evidência terminal do `Clipping_2026`;
 - publicação SharePoint: destino adicional, fora do caminho crítico; site/biblioteca/pasta e workbook canônico validados, com replay sem duplicação (`docs/sharepoint-corporate-discovery.md`);
-- governança da branch `main`: sem proteção efetiva; ruleset alvo especificado em `docs/governance-main-branch.md`.
+- governança da branch `main`: ruleset `main-protection` ativo e `protected=true` (leitura API em 2026-10-23); PR e check `tests` obrigatórios, sem bypass configurado. Ainda falta comprovar a rejeição de push direto; ver `docs/governance-main-branch.md`.
 
 ## Regra inicial
 - `include`: porta-voz/professor/coordenador da FECAP participa editorialmente;
