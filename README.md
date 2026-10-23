@@ -69,6 +69,8 @@ Projeto isolado do ReqSys para automatizar clipping FECAP a partir de fontes de 
 
    Para a rota live da API Knewin usada pelo workflow, `scripts/e2e_live_knewin.py` exige duas pré-condições independentes: `KNEWIN_API_KEY` em memória e `KNEWIN_WORKBOOK_PATH` apontando para uma cópia controlada do workbook operacional. A execução gera saída e replay somente em `evidence/private`, não altera o workbook de origem e só retorna `PASS` quando `live_knewin_validated=true`, houve pelo menos um append novo e o replay não alterou um único byte. A chave e o payload bruto da API não são persistidos.
 
+**Knewin Live E2E em GitHub Actions:** o workflow manual deve preparar uma cópia efêmera e aprovada do workbook via Microsoft Graph, com origem fixa e SHA-256 conferido antes da coleta; os arquivos corporativos não são enviados como artifacts. A configuração do ambiente protegido, os segredos, os controles negativos e os bloqueios atuais estão em [`docs/knewin-live-workbook-gate.md`](docs/knewin-live-workbook-gate.md). **Não considerar o E2E Knewin terminal comprovado até executar uma coleta real, append positivo, releitura independente e replay no SHA corrente.**
+
 O contrato do Excel está em `docs/excel-homologation-contract.md`. Para o fluxo-alvo do vídeo, a ordem é `DATA | VEÍCULO | TIER | MÍDIA | ORIGEM | ASSUNTO | FONTE | UN. NEG. | LINK`. As regras ficam em `config/video_enrichment.json`; com `require_complete=true`, qualquer item sem enriquecimento comprovado vai para `Revisao` em vez de receber valor inventado.
 
 ### Windows: bootstrap idempotente da sessão Knewin

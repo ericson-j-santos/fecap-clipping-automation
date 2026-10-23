@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import calendar
 from hashlib import sha256
 import json
 import os
@@ -12,13 +13,15 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
-from src.excel_homologation import build_model, classify_items, validate_collector_output
+from src.excel_homologation import MONTHS, build_model, classify_items, validate_collector_output
 from src.knewin_api import KnewinApiError, KnewinNews, collect_fecap
 from src.operational_workbook import OperationalWorkbookError, append_month_rows
+from scripts.knewin_live_workbook import WorkbookGateError, runtime_paths, workbook_row_counts
 
 DEFAULT_EVIDENCE_DIR = ROOT / "evidence" / "private"
 DEFAULT_COLLECTOR = ROOT / "data" / "private" / "knewin-live-api-items.json"
 CORRELATION_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+APPROVED_SHA_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 class LiveE2EError(RuntimeError):
@@ -128,6 +131,20 @@ def _load_object(path: Path) -> dict:
     return value
 
 
+def _emit_status(payload: dict) -> None:
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        # Public repository: logs must never contain corporate counts, URLs,
+        # workbook fingerprints or collected article payloads.
+        print(json.dumps({
+            "status": payload.get("status"),
+            "reason": payload.get("reason"),
+            "correlation_id": payload.get("correlation_id"),
+            "git_sha": payload.get("git_sha"),
+        }, sort_keys=True))
+    else:
+        print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+
+
 def _write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -196,7 +213,7 @@ def _blocked(
         "production_enabled": False,
     }
     _write_json(evidence_path, payload)
-    print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+    _emit_status(payload)
     return 20
 
 
@@ -222,19 +239,37 @@ def main() -> int:
     try:
         correlation_id = validate_correlation_id(raw_correlation)
         workbook_path = _resolve_required_workbook()
+        source_bytes = workbook_path.read_bytes()
+        source_sha = sha256(source_bytes).hexdigest()
+        month_counts = None
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            approved = os.environ.get("KNEWIN_APPROVED_WORKBOOK_SHA256", "").strip().lower()
+            if not APPROVED_SHA_PATTERN.fullmatch(approved):
+                raise LiveE2EError("workbook_approval_digest_missing")
+            if source_sha != approved:
+                raise LiveE2EError("workbook_digest_mismatch")
+            paths = runtime_paths(dict(os.environ))
+            if workbook_path != paths["workbook"]:
+                raise LiveE2EError("workbook_runtime_path_mismatch")
+            month_counts = workbook_row_counts(source_bytes)
+
         start = parse_utc(os.environ.get("KNEWIN_START", "2026-08-01T00:00:00Z"))
         end = parse_utc(os.environ.get("KNEWIN_END", "2026-08-31T23:59:59Z"))
-        if end < start:
-            raise LiveE2EError("invalid_date_window")
+        expected_last_day = calendar.monthrange(start.year, start.month)[1]
+        if (end < start or start.day != 1 or start.hour or start.minute or start.second
+                or start.microsecond or end.year != start.year or end.month != start.month
+                or end.day != expected_last_day or (end.hour, end.minute, end.second)
+                != (23, 59, 59) or end.microsecond):
+            raise LiveE2EError("invalid_month_window")
+        # Reject a missing target sheet BEFORE the external Knewin request.
+        if month_counts is not None and MONTHS[start.month - 1] not in month_counts:
+            raise LiveE2EError("workbook_target_month_missing")
 
         people = _load_object(ROOT / "config" / "people.json")
         enrichment = _load_object(ROOT / "config" / "video_enrichment.json")
         collected = collect_fecap(api_key, start, end)
         if not collected:
             raise LiveE2EError("no_knewin_items")
-
-        source_bytes = workbook_path.read_bytes()
-        source_sha = sha256(source_bytes).hexdigest()
         result = execute_operational_roundtrip(
             source_bytes,
             collected,
@@ -281,12 +316,14 @@ def main() -> int:
             "production_enabled": False,
         }
         _write_json(evidence_path, summary)
-        print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
+        _emit_status(summary)
         return 0
     except LiveE2EError as exc:
         reason = exc.code
     except KnewinApiError:
         reason = "knewin_api_failed"
+    except WorkbookGateError as exc:
+        reason = exc.code
     except (OperationalWorkbookError, ValueError):
         reason = "workbook_validation_failed"
     except (OSError, json.JSONDecodeError):
