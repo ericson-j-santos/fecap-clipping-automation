@@ -206,12 +206,18 @@ def _graph_download(env: dict[str, str]) -> bytes:
         "https://graph.microsoft.com/v1.0/drives/" + drive + "/items/" + item + "/content",
         headers={"Authorization": "Bearer " + token},
     )
-    # Graph responds with a short-lived preauthenticated SharePoint URL.
-    # No Authorization header is ever forwarded to the download origin.
+    # Microsoft will retire Graph 302 tempauth downloads beginning 2027-04-01.
+    # Accept direct authenticated Graph HTTP 200 as well as the legacy redirect,
+    # but NEVER forward the Graph Bearer to a redirected download origin.
     try:
         try:
-            with _opener().open(req, timeout=30):
-                raise WorkbookGateError("graph_download_redirect_missing")
+            with _opener().open(req, timeout=60) as response:
+                if response.status != 200:
+                    raise WorkbookGateError("graph_workbook_unavailable")
+                payload = response.read(MAX_DOWNLOAD_BYTES + 1)
+                if len(payload) > MAX_DOWNLOAD_BYTES:
+                    raise WorkbookGateError("workbook_too_large")
+                return payload
         except HTTPError as exc:
             if exc.code not in (301, 302, 303, 307, 308):
                 raise WorkbookGateError("graph_workbook_unavailable") from exc
