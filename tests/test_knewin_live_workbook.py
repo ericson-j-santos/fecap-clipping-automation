@@ -111,6 +111,9 @@ def test_workflow() -> None:
     assert workflow.index("knewin_live_workbook.py prepare") < workflow.index("e2e_live_knewin.py")
     assert workflow.index("e2e_live_knewin.py") < workflow.index("knewin_live_workbook.py verify")
     assert "upload-artifact" not in workflow
+    # runner.* expressions are unavailable at jobs.<job_id>.env; the runner
+    # already exports RUNNER_TEMP as a default environment variable.
+    assert "RUNNER_TEMP: $" + "{{ runner.temp }}" not in workflow
 
 
 def test_digest_schema_origin() -> None:
