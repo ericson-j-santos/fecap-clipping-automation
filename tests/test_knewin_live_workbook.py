@@ -170,8 +170,9 @@ def test_graph_token_and_download_transport() -> None:
                 return self.payload[:limit]
 
         class FakeOpener:
-            def __init__(self, redirect: str):
+            def __init__(self, redirect: str, *, direct_graph: bool = False):
                 self.redirect = redirect
+                self.direct_graph = direct_graph
                 self.calls = []
 
             def open(self, request, timeout=None):
@@ -183,6 +184,8 @@ def test_graph_token_and_download_transport() -> None:
                     return Response(json.dumps({"access_token": "x" * 32}).encode())
                 if url.startswith("https://graph.microsoft.com/"):
                     assert auth == "Bearer " + ("x" * 32)
+                    if self.direct_graph:
+                        return Response(payload)
                     raise HTTPError(url, 302, "redirect",
                                     {"Location": self.redirect}, None)
                 if url.startswith("https://example.sharepoint.com/"):
@@ -197,6 +200,14 @@ def test_graph_token_and_download_transport() -> None:
         assert good.calls[0][1] is False
         assert good.calls[1][1] is True
         assert good.calls[2][1] is False
+
+        # Microsoft Graph will serve content directly when tempauth 302 retires.
+        direct = FakeOpener(location, direct_graph=True)
+        with patch.object(gate, "_opener", return_value=direct):
+            assert gate._graph_download(env) == payload
+        assert len(direct.calls) == 2
+        assert direct.calls[0][1] is False
+        assert direct.calls[1][1] is True
 
         bad = FakeOpener("https://attacker.invalid/x")
         with patch.object(gate, "_opener", return_value=bad):
