@@ -15,6 +15,42 @@ O aceite terminal exige UMA execução manual em main@SHA, com:
 5. Run/job do SHA com passos executados e estado terminal: não usar fixture,
    GDELT, log 2xx ou artefato anterior como substituto.
 
+## Origem do arquivo: OneDrive pessoal não é SharePoint empresarial
+
+O arquivo `Clipping_2026.xlsx` anexado à conversa foi utilizado exclusivamente
+para testes privados e sintéticos, com o original inalterado. Um link público
+ou compartilhado do OneDrive **pessoal** (`1drv.ms`, conta de consumidor)
+não constitui um `drive_id/item_id` corporativo autorizado. O Microsoft
+Graph configurado neste workflow usa `client_credentials` de aplicativo
+do Microsoft Entra, `Sites.Selected` e um redirect aprovado
+`*.sharepoint.com` do locatário empresarial; não deve tentar usar
+esse token de aplicativo para ler o OneDrive pessoal.
+
+Há duas rotas de implantação distintas:
+
+1. **Rota corporativa do workflow atual:** proprietário aprova uma cópia
+   privada do workbook num drive SharePoint/OneDrive for Business do tenant,
+   confirma a identidade exata, versão, hash e uma concessão `read`
+   restrita ao aplicativo. O original do OneDrive pessoal não é alterado.
+2. **Rota local de homologação:** executar o E2E com o workbook fornecido em
+   uma máquina/sessão governada e chave Knewin obtida do cofre, sem Graph,
+   compartilhamento público, navegador Opera ou upload de XLSX em GitHub.
+   Essa opção depende de `SESSION_LAUNCH_OK`, Gateway operacional e
+   autorização de leitura da credencial. A simples conexão do host não prova
+   esses requisitos.
+
+**Não fazer migração de dados entre contas pessoal e corporativa sem
+autorização específica do destino e classificação da informação.**
+Compartilhamento com URL não substitui autenticação autorizada.
+Somente depois de escolher uma rota e validar as precondições é permitido
+um único teste real do Knewin (coleta, append em cópia, leitura independente
+e replay). Um teste com notícia sintética nunca comprova esse gate.
+
+Referências:
+- https://learn.microsoft.com/en-us/onedrive/developer/rest-api/concepts/direct-endpoint-differences
+- https://learn.microsoft.com/en-us/graph/permissions-selected-overview
+- https://learn.microsoft.com/en-us/graph/sdks/choose-authentication-providers
+
 ## Provisionamento governado sem inserir workbook no GitHub
 
 A origem do arquivo não é escolhida no dispatch. Configurar um ambiente GitHub
