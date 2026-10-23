@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
-from src.excel_homologation import build_model, classify_items, validate_collector_output
+from src.excel_homologation import MONTHS, build_model, classify_items, validate_collector_output
 from src.knewin_api import KnewinApiError, KnewinNews, collect_fecap
 from src.operational_workbook import OperationalWorkbookError, append_month_rows
 from scripts.knewin_live_workbook import WorkbookGateError, runtime_paths, workbook_row_counts
@@ -241,6 +241,7 @@ def main() -> int:
         workbook_path = _resolve_required_workbook()
         source_bytes = workbook_path.read_bytes()
         source_sha = sha256(source_bytes).hexdigest()
+        month_counts = None
         if os.environ.get("GITHUB_ACTIONS") == "true":
             approved = os.environ.get("KNEWIN_APPROVED_WORKBOOK_SHA256", "").strip().lower()
             if not APPROVED_SHA_PATTERN.fullmatch(approved):
@@ -250,7 +251,7 @@ def main() -> int:
             paths = runtime_paths(dict(os.environ))
             if workbook_path != paths["workbook"]:
                 raise LiveE2EError("workbook_runtime_path_mismatch")
-            workbook_row_counts(source_bytes)
+            month_counts = workbook_row_counts(source_bytes)
 
         start = parse_utc(os.environ.get("KNEWIN_START", "2026-08-01T00:00:00Z"))
         end = parse_utc(os.environ.get("KNEWIN_END", "2026-08-31T23:59:59Z"))
@@ -260,6 +261,9 @@ def main() -> int:
                 or end.day != expected_last_day or (end.hour, end.minute, end.second)
                 != (23, 59, 59) or end.microsecond):
             raise LiveE2EError("invalid_month_window")
+        # Reject a missing target sheet BEFORE the external Knewin request.
+        if month_counts is not None and MONTHS[start.month - 1] not in month_counts:
+            raise LiveE2EError("workbook_target_month_missing")
 
         people = _load_object(ROOT / "config" / "people.json")
         enrichment = _load_object(ROOT / "config" / "video_enrichment.json")

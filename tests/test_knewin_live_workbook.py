@@ -10,6 +10,7 @@ import sys
 import tempfile
 from unittest.mock import patch
 import zipfile
+from xml.etree import ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -18,7 +19,7 @@ from scripts.knewin_live_workbook import (
     WorkbookGateError, _approved_download_url, _verify_approved_bytes, cleanup,
     prepare_workbook, runtime_paths, verify_roundtrip, workbook_row_counts,
 )
-from src.excel_homologation import build_workbook_bytes
+from src.excel_homologation import MONTHS, build_workbook_bytes
 from src.operational_workbook import append_month_rows
 
 
@@ -40,6 +41,25 @@ def workbook_fixture() -> bytes:
         collector, {"Rosely Schwartz": "Extensão"}, {}, enrichment_rules=rules
     )
     return workbook
+
+
+def workbook_without_months(payload: bytes, omitted: set[str]) -> bytes:
+    """Modify synthetic OOXML only; never commit or alter an operational workbook."""
+    out = io.BytesIO()
+    main_ns = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+    with zipfile.ZipFile(io.BytesIO(payload)) as zin, zipfile.ZipFile(out, "w") as zout:
+        for info in zin.infolist():
+            raw = zin.read(info.filename)
+            if info.filename == "xl/workbook.xml":
+                root = ET.fromstring(raw)
+                sheets = root.find(main_ns + "sheets")
+                assert sheets is not None
+                for sheet in list(sheets):
+                    if sheet.get("name") in omitted:
+                        sheets.remove(sheet)
+                raw = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+            zout.writestr(info, raw)
+    return out.getvalue()
 
 
 def env_fixture(temp: Path, payload: bytes) -> dict[str, str]:
@@ -120,6 +140,14 @@ def test_workflow() -> None:
 def test_digest_schema_origin() -> None:
     original = workbook_fixture()
     assert len(workbook_row_counts(original)) == 12
+    partial = workbook_without_months(original, {"Outubro", "Novembro", "Dezembro"})
+    assert list(workbook_row_counts(partial)) == list(MONTHS[:9])
+    # Gaps or a book not starting in January remain strictly forbidden.
+    blocked(lambda: workbook_row_counts(workbook_without_months(original, {"Fevereiro"})),
+            "workbook_month_sheets_invalid")
+    blocked(lambda: workbook_row_counts(workbook_without_months(original, {"Janeiro"})),
+            "workbook_month_sheets_invalid")
+    _verify_approved_bytes(partial, sha256(partial).hexdigest())
     _verify_approved_bytes(original, sha256(original).hexdigest())
     blocked(lambda: _verify_approved_bytes(original, "0" * 64), "workbook_digest_mismatch")
     blocked(lambda: _verify_approved_bytes(original, "invalid"), "workbook_approval_digest_invalid")
@@ -309,12 +337,41 @@ def test_executor_preflight_avoids_knewin_request() -> None:
         cleanup(env)
 
 
+def test_missing_target_month_never_calls_knewin() -> None:
+    """Target October is absent in a January-September synthetic workbook."""
+    partial = workbook_without_months(
+        workbook_fixture(), {"Outubro", "Novembro", "Dezembro"}
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        temp = Path(tmp)
+        env = env_fixture(temp, partial)
+        env.update({
+            "KNEWIN_EVIDENCE_PATH": str(temp / "blocked.json"),
+            "KNEWIN_OUTPUT_WORKBOOK_PATH": str(temp / "output.xlsx"),
+            "KNEWIN_REPLAY_WORKBOOK_PATH": str(temp / "replay.xlsx"),
+            "KNEWIN_COLLECTOR_PATH": str(temp / "collector.json"),
+            "KNEWIN_START": "2026-10-01T00:00:00Z",
+            "KNEWIN_END": "2026-10-31T23:59:59Z",
+        })
+        paths = prepare_workbook(env, downloader=lambda _: partial)
+        env["KNEWIN_WORKBOOK_PATH"] = str(paths["workbook"])
+        with patch.dict(os.environ, env, clear=True):
+            with patch.object(live, "collect_fecap",
+                              side_effect=AssertionError("unexpected Knewin call")):
+                assert live.main() == 20
+        assert json.loads((temp / "blocked.json").read_text("utf-8"))["reason"] == (
+            "workbook_target_month_missing"
+        )
+        cleanup(env)
+
+
 def main() -> int:
     test_workflow()
     test_digest_schema_origin()
     test_graph_token_and_download_transport()
     test_preflight_and_readback()
     test_executor_preflight_avoids_knewin_request()
+    test_missing_target_month_never_calls_knewin()
     print("test_knewin_live_workbook: OK (synthetic only; live Knewin NOT validated)")
     return 0
 

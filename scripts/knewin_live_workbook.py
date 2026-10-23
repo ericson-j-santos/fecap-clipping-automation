@@ -123,11 +123,14 @@ def workbook_row_counts(payload: bytes) -> dict[str, int]:
             if "xl/sharedStrings.xml" in names:
                 files["xl/sharedStrings.xml"] = archive.read("xl/sharedStrings.xml")
             sheets = _workbook_sheets(files)
-            if any(month not in sheets for month in MONTHS):
-                raise WorkbookGateError("workbook_month_sheets_missing")
+            # Monthly operational books may omit future months, but not gaps.
+            present_months = [month for month in MONTHS if month in sheets]
+            if (not present_months
+                    or present_months != list(MONTHS[:len(present_months)])):
+                raise WorkbookGateError("workbook_month_sheets_invalid")
             shared = _shared_strings(files)
             counts = {}
-            for month in MONTHS:
+            for month in present_months:
                 sheet_path = sheets[month]
                 if (not sheet_path.startswith("xl/worksheets/")
                         or sheet_path not in names

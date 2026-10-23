@@ -57,8 +57,11 @@ contents: read e concorrência serial; sem Docker, scheduler ou produção.
    /drives/{drive}/items/{item}/content, suporte a resposta Graph 200 direta
    autenticada OU redirect 302 legado HTTPS ao host exato aprovado,
    download sem repassar header Bearer Graph para SharePoint.
-3. Verifica tamanho, SHA-256, ZIP/OOXML, 12 abas mensais e cabeçalho com nove
-   colunas. Materializa arquivo privado (0600) em RUNNER_TEMP, fornece
+3. Verifica tamanho, SHA-256, ZIP/OOXML e cabeçalho com nove colunas em
+   todas as abas mensais presentes. Aceita de 1 a 12 meses consecutivos
+   desde Janeiro, sem exigir meses futuros que ainda não existam; o mês
+   solicitado deve existir antes de qualquer chamada à Knewin. Lacuna
+   intermediária bloqueia. Materializa arquivo privado (0600) em RUNNER_TEMP, fornece
    KNEWIN_WORKBOOK_PATH e arquivos de saída somente aos passos do mesmo job.
 4. E2E: valida novamente digest e mês UTC completo ANTES da API Knewin, coleta
    notícia real, append em cópia, replay. Nunca sobrescreve o arquivo corporativo.
@@ -76,8 +79,10 @@ que GitHub Actions standard hosted e Graph não gerarão custo incremental.
 O teste tests/test_knewin_live_workbook.py usa workbook e chave sintéticos,
 sem Graph ou Knewin reais. Cobre positivo de preparação/readback, ausência de
 chave/path/arquivo/secret, origem não aprovada, hash incorreto, host falso,
-OOXML corrompido, branch/evento indevido, replay alterado, falso recibo, falta
-de append, inexistência de arquivo e cleanup idempotente.
+OOXML corrompido, abas mensais futuras ausentes (caso positivo), lacunas mensais
+(caso negativo), mês-alvo inexistente antes da API, branch/evento indevido,
+replay alterado, falso recibo, falta de append, inexistência de arquivo e
+cleanup idempotente.
 
 CI verde comprova o contrato local, nunca coleta real. Gate restante:
 aprovar Clipping_2026 canônico, validar identidade/escopo Graph, secrets do
