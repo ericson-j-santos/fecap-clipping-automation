@@ -1,6 +1,7 @@
 """Synthetic regression only; no test here performs authenticated Knewin collection."""
 from __future__ import annotations
 from hashlib import sha256
+from urllib.error import HTTPError
 import io
 import json
 import os
@@ -142,6 +143,74 @@ def test_digest_schema_origin() -> None:
                 "download_origin_rejected")
 
 
+def test_graph_token_and_download_transport() -> None:
+    """Fake network verifies OAuth, safe redirect and Bearer isolation."""
+    from scripts import knewin_live_workbook as gate
+
+    payload = workbook_fixture()
+    with tempfile.TemporaryDirectory() as tmp:
+        env = env_fixture(Path(tmp), payload)
+        location = "https://example.sharepoint.com/download?tempauth=synthetic"
+
+        class Response:
+            status = 200
+
+            def __init__(self, data: bytes):
+                self.payload = data
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self, limit=None):
+                if limit is None:
+                    return self.payload
+                return self.payload[:limit]
+
+        class FakeOpener:
+            def __init__(self, redirect: str):
+                self.redirect = redirect
+                self.calls = []
+
+            def open(self, request, timeout=None):
+                url = request.full_url
+                auth = request.get_header("Authorization")
+                self.calls.append((url.split("?")[0], bool(auth)))
+                if url.startswith("https://login.microsoftonline.com/"):
+                    assert not auth
+                    return Response(json.dumps({"access_token": "x" * 32}).encode())
+                if url.startswith("https://graph.microsoft.com/"):
+                    assert auth == "Bearer " + ("x" * 32)
+                    raise HTTPError(url, 302, "redirect",
+                                    {"Location": self.redirect}, None)
+                if url.startswith("https://example.sharepoint.com/"):
+                    assert auth is None, "Graph token must never be sent to SharePoint redirect"
+                    return Response(payload)
+                raise AssertionError("untrusted network destination")
+
+        good = FakeOpener(location)
+        with patch.object(gate, "_opener", return_value=good):
+            assert gate._graph_download(env) == payload
+        assert len(good.calls) == 3
+        assert good.calls[0][1] is False
+        assert good.calls[1][1] is True
+        assert good.calls[2][1] is False
+
+        bad = FakeOpener("https://attacker.invalid/x")
+        with patch.object(gate, "_opener", return_value=bad):
+            blocked(lambda: gate._graph_download(env), "download_origin_rejected")
+        assert len(bad.calls) == 2
+
+        class RejectedToken:
+            def open(self, request, timeout=None):
+                raise HTTPError(request.full_url, 401, "rejected", {}, None)
+
+        with patch.object(gate, "_opener", return_value=RejectedToken()):
+            blocked(lambda: gate._graph_download(env), "graph_authentication_failed")
+
+
 def test_preflight_and_readback() -> None:
     base = workbook_fixture()
     with tempfile.TemporaryDirectory() as tmp:
@@ -232,6 +301,7 @@ def test_executor_preflight_avoids_knewin_request() -> None:
 def main() -> int:
     test_workflow()
     test_digest_schema_origin()
+    test_graph_token_and_download_transport()
     test_preflight_and_readback()
     test_executor_preflight_avoids_knewin_request()
     print("test_knewin_live_workbook: OK (synthetic only; live Knewin NOT validated)")
