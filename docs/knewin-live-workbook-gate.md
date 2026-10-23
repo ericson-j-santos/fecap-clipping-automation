@@ -54,7 +54,8 @@ contents: read e concorrência serial; sem Docker, scheduler ou produção.
    de 64 hex e host SharePoint exato. Branch fora de main, evento diferente,
    repositório diferente ou SHA inválido bloqueia.
 2. Prepare: OAuth Graph em memória, solicitação ao endpoint
-   /drives/{drive}/items/{item}/content, redirect HTTPS ao host exato aprovado,
+   /drives/{drive}/items/{item}/content, suporte a resposta Graph 200 direta
+   autenticada OU redirect 302 legado HTTPS ao host exato aprovado,
    download sem repassar header Bearer Graph para SharePoint.
 3. Verifica tamanho, SHA-256, ZIP/OOXML, 12 abas mensais e cabeçalho com nove
    colunas. Materializa arquivo privado (0600) em RUNNER_TEMP, fornece
@@ -83,3 +84,16 @@ aprovar Clipping_2026 canônico, validar identidade/escopo Graph, secrets do
 ambiente, proteção de branch e capacidade gratuita. Só então disparar um
 único live E2E e auditar seus passos e evidência da releitura física. Issue
 #53 fica aberta até essa prova.
+
+## Compatibilidade futura comprovada por aviso oficial (outubro de 2026)
+
+A Microsoft anunciou que a partir de 01/04/2027 iniciará a retirada dos
+redirects 302 com URLs preautenticadas de downloads no Graph; a resposta
+de conteúdo direta autenticada deve substituir o fluxo antigo. Por isso, o
+gate aceita tanto HTTP 200 direto do Graph quanto 302 legado, com testes
+sintéticos dos dois fluxos. Não repassa Bearer Graph a outro host, nem aceita
+URLs externas sem allowlist explícita. A mudança real no tenant corporativo
+continua **não verificada**; esse teste não comprova operação Knewin real.
+
+Aviso oficial:
+https://devblogs.microsoft.com/microsoft365dev/pre-authenticated-tempauth-urls-are-retiring-move-to-microsoft-entra-id-tokens-before-april-1-2027/
