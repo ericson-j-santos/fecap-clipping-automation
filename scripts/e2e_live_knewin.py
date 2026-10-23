@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from src.excel_homologation import build_model, classify_items, validate_collector_output
 from src.knewin_api import KnewinApiError, KnewinNews, collect_fecap
 from src.operational_workbook import OperationalWorkbookError, append_month_rows
+from scripts.knewin_live_workbook import WorkbookGateError, runtime_paths, workbook_row_counts
 
 DEFAULT_EVIDENCE_DIR = ROOT / "evidence" / "private"
 DEFAULT_COLLECTOR = ROOT / "data" / "private" / "knewin-live-api-items.json"
@@ -246,7 +247,6 @@ def main() -> int:
                 raise LiveE2EError("workbook_approval_digest_missing")
             if source_sha != approved:
                 raise LiveE2EError("workbook_digest_mismatch")
-            from scripts.knewin_live_workbook import runtime_paths, workbook_row_counts
             paths = runtime_paths(dict(os.environ))
             if workbook_path != paths["workbook"]:
                 raise LiveE2EError("workbook_runtime_path_mismatch")
@@ -318,6 +318,8 @@ def main() -> int:
         reason = exc.code
     except KnewinApiError:
         reason = "knewin_api_failed"
+    except WorkbookGateError as exc:
+        reason = exc.code
     except (OperationalWorkbookError, ValueError):
         reason = "workbook_validation_failed"
     except (OSError, json.JSONDecodeError):
