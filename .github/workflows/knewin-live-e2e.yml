@@ -39,7 +39,6 @@ jobs:
       KNEWIN_START: ${{ inputs.start }}
       KNEWIN_END: ${{ inputs.end }}
       CORRELATION_ID: knewin-gha-${{ github.run_id }}-${{ github.run_attempt }}
-      RUNNER_TEMP: ${{ runner.temp }}
     steps:
       - name: Checkout do SHA do dispatch
         uses: actions/checkout@v7
